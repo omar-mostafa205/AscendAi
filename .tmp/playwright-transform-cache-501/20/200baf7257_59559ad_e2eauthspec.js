@@ -1,0 +1,13 @@
+"use strict";
+
+var _test = require("@playwright/test");
+(0, _test.test)('unauth root redirects to login', async ({
+  page
+}) => {
+  await page.goto('http://localhost:3000/', {
+    waitUntil: 'domcontentloaded'
+  });
+  await page.waitForTimeout(1000);
+  (0, _test.expect)(page.url()).toContain('/login');
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfdGVzdCIsInJlcXVpcmUiLCJ0ZXN0IiwicGFnZSIsImdvdG8iLCJ3YWl0VW50aWwiLCJ3YWl0Rm9yVGltZW91dCIsImV4cGVjdCIsInVybCIsInRvQ29udGFpbiJdLCJzb3VyY2VzIjpbImUyZS1hdXRoLnNwZWMudHMiXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgdGVzdCwgZXhwZWN0IH0gZnJvbSAnQHBsYXl3cmlnaHQvdGVzdCc7XG5cbnRlc3QoJ3VuYXV0aCByb290IHJlZGlyZWN0cyB0byBsb2dpbicsIGFzeW5jICh7IHBhZ2UgfSkgPT4ge1xuICBhd2FpdCBwYWdlLmdvdG8oJ2h0dHA6Ly9sb2NhbGhvc3Q6MzAwMC8nLCB7IHdhaXRVbnRpbDogJ2RvbWNvbnRlbnRsb2FkZWQnIH0pO1xuICBhd2FpdCBwYWdlLndhaXRGb3JUaW1lb3V0KDEwMDApO1xuICBleHBlY3QocGFnZS51cmwoKSkudG9Db250YWluKCcvbG9naW4nKTtcbn0pO1xuIl0sIm1hcHBpbmdzIjoiOztBQUFBLElBQUFBLEtBQUEsR0FBQUMsT0FBQTtBQUVBLElBQUFDLFVBQUksRUFBQyxnQ0FBZ0MsRUFBRSxPQUFPO0VBQUVDO0FBQUssQ0FBQyxLQUFLO0VBQ3pELE1BQU1BLElBQUksQ0FBQ0MsSUFBSSxDQUFDLHdCQUF3QixFQUFFO0lBQUVDLFNBQVMsRUFBRTtFQUFtQixDQUFDLENBQUM7RUFDNUUsTUFBTUYsSUFBSSxDQUFDRyxjQUFjLENBQUMsSUFBSSxDQUFDO0VBQy9CLElBQUFDLFlBQU0sRUFBQ0osSUFBSSxDQUFDSyxHQUFHLENBQUMsQ0FBQyxDQUFDLENBQUNDLFNBQVMsQ0FBQyxRQUFRLENBQUM7QUFDeEMsQ0FBQyxDQUFDIiwiaWdub3JlTGlzdCI6W119

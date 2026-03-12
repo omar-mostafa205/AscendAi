@@ -1,0 +1,183 @@
+{
+  "createdAt": "2026-03-12T08:38:10.891Z",
+  "frontendUrl": "http://localhost:3000",
+  "backendBase": "http://localhost:8001",
+  "jobId": "6037a420-4bcf-4e14-9c70-defeae16199a",
+  "sessionId": "e92d848d-f971-4cfc-a2fa-51abbd7b717c",
+  "results": [
+    {
+      "name": "TEST 1 — Auth Flow (frontend redirects)",
+      "pass": true,
+      "ms": 1510,
+      "status": 0,
+      "body": {
+        "url1": "http://localhost:3000/login?next=%2Fdashboard",
+        "url2": "http://localhost:3000/login?next=%2Fdashboard"
+      },
+      "ui": "Redirects to /login when unauthenticated"
+    },
+    {
+      "name": "LOGIN — Sign in via UI",
+      "pass": true,
+      "ms": 3727,
+      "status": 0,
+      "body": {
+        "url": "http://localhost:3000/jobs"
+      },
+      "ui": "Authenticated session established"
+    },
+    {
+      "name": "TEST 2 — Jobs page matches backend jobs",
+      "pass": true,
+      "ms": 2464,
+      "status": 200,
+      "body": {
+        "data": [
+          {
+            "id": "ac9de9a7-dc0e-4386-bec7-6cabc384c865",
+            "title": "Senior Software Engineer",
+            "company": "Stripe",
+            "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+            "createdAt": "2026-03-12T08:30:40.389Z"
+          },
+          {
+            "id": "e0e35a9c-500a-420b-abf6-81770c6dc305",
+            "title": "Senior Software Engineer 1773304029061",
+            "company": "Stripe",
+            "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+            "createdAt": "2026-03-12T08:27:11.409Z"
+          },
+          {
+            "id": "fd29e8e1-dc8a-4601-b748-0487de32c9e1",
+            "title": "Senior Software Engineer",
+            "company": "Stripe",
+            "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+            "createdAt": "2026-03-12T07:46:58.295Z"
+          },
+          {
+            "id": "12d22819-702b-49db-a4f1-558b8e61870b",
+            "title": "Senior Software Engineer",
+            "company": "Stripe",
+            "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+            "createdAt": "2026-03-12T07:40:14.120Z"
+          }
+        ]
+      },
+      "ui": "Found 4 job(s) from backend on /jobs UI"
+    },
+    {
+      "name": "TEST 3 — Create Job (UI → backend)",
+      "pass": true,
+      "ms": 2826,
+      "status": 201,
+      "body": {
+        "data": {
+          "id": "6037a420-4bcf-4e14-9c70-defeae16199a",
+          "userId": "57cb807a-84d2-4709-88e4-cfd06d77b8c2",
+          "title": "Senior Software Engineer 1773304600960",
+          "company": "Stripe",
+          "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+          "createdAt": "2026-03-12T08:36:42.046Z"
+        }
+      },
+      "ui": "Job card appears on /jobs without refresh",
+      "JOB_ID": "6037a420-4bcf-4e14-9c70-defeae16199a"
+    },
+    {
+      "name": "TEST 4 — Job details page UI",
+      "pass": true,
+      "ms": 6075,
+      "status": 0,
+      "body": {
+        "url": "http://localhost:3000/jobs/6037a420-4bcf-4e14-9c70-defeae16199a",
+        "hasJobDescriptionRendered": false
+      },
+      "ui": "Scenario picker visible; past sessions expected empty"
+    },
+    {
+      "name": "TEST 8 — Start interview without scenario (UI)",
+      "pass": true,
+      "ms": 4516,
+      "status": 0,
+      "body": {
+        "apiCalled": false
+      },
+      "ui": "Toast shown; no network call made"
+    },
+    {
+      "name": "TEST 5 — Create Session (UI)",
+      "pass": true,
+      "ms": 20915,
+      "status": 201,
+      "body": {
+        "data": {
+          "session": {
+            "id": "e92d848d-f971-4cfc-a2fa-51abbd7b717c",
+            "userId": "57cb807a-84d2-4709-88e4-cfd06d77b8c2",
+            "jobId": "6037a420-4bcf-4e14-9c70-defeae16199a",
+            "personaId": "ea965420-b189-47a7-9acd-940f258d9780",
+            "voiceId": null,
+            "scenarioType": "technical",
+            "difficultyLevel": "medium",
+            "status": "in_progress",
+            "livekitRoomName": null,
+            "startedAt": "2026-03-12T08:37:07.342Z",
+            "endedAt": null,
+            "durationSeconds": null,
+            "overallScore": null,
+            "feedback": null,
+            "createdAt": "2026-03-12T08:37:07.342Z",
+            "updatedAt": "2026-03-12T08:37:07.342Z"
+          },
+          "livekitToken": "eyJhbGciOiJIUzI1NiJ9.eyJuYW1lIjoiNTdjYjgwN2EtODRkMi00NzA5LTg4ZTQtY2ZkMDZkNzdiOGMyIiwidmlkZW8iOnsicm9vbUpvaW4iOnRydWUsInJvb20iOiJlOTJkODQ4ZC1mOTcxLTRjZmMtYTJmYS01MWFiYmQ3YjcxN2MiLCJjYW5QdWJsaXNoIjp0cnVlLCJjYW5TdWJzY3JpYmUiOnRydWV9LCJpc3MiOiJBUElYNVluQVBkRVpkYjkiLCJleHAiOjE3NzMzMDgyMjksIm5iZiI6MCwic3ViIjoiNTdjYjgwN2EtODRkMi00NzA5LTg4ZTQtY2ZkMDZkNzdiOGMyIn0.zEai7oG-oEKWOnoxlK2e2ebQ7ZHSxDdF29gJA_gm150"
+        }
+      },
+      "ui": "Redirects to /session/SESSION_ID",
+      "SESSION_ID": "e92d848d-f971-4cfc-a2fa-51abbd7b717c"
+    },
+    {
+      "name": "TEST 6 — Socket + Session page UI",
+      "pass": true,
+      "ms": 49821,
+      "status": 0,
+      "body": {
+        "url": "http://localhost:3000/feedback/e92d848d-f971-4cfc-a2fa-51abbd7b717c",
+        "micUnmuted": true,
+        "livekitLive": true,
+        "sawThinking": false
+      },
+      "ui": "Session active badge shown; end interview redirects to feedback"
+    },
+    {
+      "name": "TEST 7 — Feedback page auto-updates",
+      "pass": true,
+      "ms": 4064,
+      "status": 0,
+      "body": {
+        "url": "http://localhost:3000/feedback/e92d848d-f971-4cfc-a2fa-51abbd7b717c"
+      },
+      "ui": "Feedback rendered without refresh"
+    },
+    {
+      "name": "TEST 8 — Invalid job UUID redirects",
+      "pass": true,
+      "ms": 1714,
+      "status": 0,
+      "body": {
+        "url": "http://localhost:3000/jobs"
+      },
+      "ui": "Redirects to /jobs"
+    },
+    {
+      "name": "TEST 9 — Authorization header on API requests",
+      "pass": true,
+      "ms": 0,
+      "status": 0,
+      "body": {
+        "apiRequestCount": 15
+      },
+      "ui": "All backend API calls included Bearer token; no api keys found"
+    }
+  ],
+  "consoleErrors": []
+}

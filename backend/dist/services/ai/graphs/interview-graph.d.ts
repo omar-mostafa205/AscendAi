@@ -1,0 +1,50 @@
+export declare const createInterviewGraph: () => Promise<import("@langchain/langgraph").CompiledStateGraph<{
+    messages: import("@langchain/core/messages").BaseMessage<import("@langchain/core/messages").MessageStructure<import("@langchain/core/messages").MessageToolSet>, import("@langchain/core/messages").MessageType>[];
+    currentQuestion: string;
+    questionCount: number;
+    maxQuestions: number;
+    scores: Record<string, number>;
+    jobContext: string;
+    personaContext: string;
+    isComplete: boolean;
+    feedback: import("./interview-state").FeedbackResult | null;
+    overallScore: number | null;
+    scenarioType: string;
+}, {
+    messages?: import("@langchain/core/messages").BaseMessage<import("@langchain/core/messages").MessageStructure<import("@langchain/core/messages").MessageToolSet>, import("@langchain/core/messages").MessageType>[] | undefined;
+    currentQuestion?: string | undefined;
+    questionCount?: number | undefined;
+    maxQuestions?: number | undefined;
+    scores?: Record<string, number> | undefined;
+    jobContext?: string | undefined;
+    personaContext?: string | undefined;
+    isComplete?: boolean | undefined;
+    feedback?: import("./interview-state").FeedbackResult | null | undefined;
+    overallScore?: number | null | undefined;
+    scenarioType?: string | undefined;
+}, "__start__", {
+    messages: import("@langchain/langgraph").BinaryOperatorAggregate<import("@langchain/core/messages").BaseMessage<import("@langchain/core/messages").MessageStructure<import("@langchain/core/messages").MessageToolSet>, import("@langchain/core/messages").MessageType>[], import("@langchain/core/messages").BaseMessage<import("@langchain/core/messages").MessageStructure<import("@langchain/core/messages").MessageToolSet>, import("@langchain/core/messages").MessageType>[]>;
+    currentQuestion: import("@langchain/langgraph").BinaryOperatorAggregate<string, string>;
+    questionCount: import("@langchain/langgraph").BinaryOperatorAggregate<number, number>;
+    maxQuestions: import("@langchain/langgraph").BinaryOperatorAggregate<number, number>;
+    scores: import("@langchain/langgraph").BinaryOperatorAggregate<Record<string, number>, Record<string, number>>;
+    jobContext: import("@langchain/langgraph").BinaryOperatorAggregate<string, string>;
+    personaContext: import("@langchain/langgraph").BinaryOperatorAggregate<string, string>;
+    isComplete: import("@langchain/langgraph").BinaryOperatorAggregate<boolean, boolean>;
+    feedback: import("@langchain/langgraph").BinaryOperatorAggregate<import("./interview-state").FeedbackResult | null, import("./interview-state").FeedbackResult | null>;
+    overallScore: import("@langchain/langgraph").BinaryOperatorAggregate<number | null, number | null>;
+    scenarioType: import("@langchain/langgraph").BinaryOperatorAggregate<string, string>;
+}, {
+    messages: import("@langchain/langgraph").BinaryOperatorAggregate<import("@langchain/core/messages").BaseMessage<import("@langchain/core/messages").MessageStructure<import("@langchain/core/messages").MessageToolSet>, import("@langchain/core/messages").MessageType>[], import("@langchain/core/messages").BaseMessage<import("@langchain/core/messages").MessageStructure<import("@langchain/core/messages").MessageToolSet>, import("@langchain/core/messages").MessageType>[]>;
+    currentQuestion: import("@langchain/langgraph").BinaryOperatorAggregate<string, string>;
+    questionCount: import("@langchain/langgraph").BinaryOperatorAggregate<number, number>;
+    maxQuestions: import("@langchain/langgraph").BinaryOperatorAggregate<number, number>;
+    scores: import("@langchain/langgraph").BinaryOperatorAggregate<Record<string, number>, Record<string, number>>;
+    jobContext: import("@langchain/langgraph").BinaryOperatorAggregate<string, string>;
+    personaContext: import("@langchain/langgraph").BinaryOperatorAggregate<string, string>;
+    isComplete: import("@langchain/langgraph").BinaryOperatorAggregate<boolean, boolean>;
+    feedback: import("@langchain/langgraph").BinaryOperatorAggregate<import("./interview-state").FeedbackResult | null, import("./interview-state").FeedbackResult | null>;
+    overallScore: import("@langchain/langgraph").BinaryOperatorAggregate<number | null, number | null>;
+    scenarioType: import("@langchain/langgraph").BinaryOperatorAggregate<string, string>;
+}, import("@langchain/langgraph").StateDefinition, unknown, unknown, unknown>>;
+export default createInterviewGraph;

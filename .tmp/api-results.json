@@ -1,0 +1,155 @@
+{
+  "createdAt": "2026-03-12T08:33:51.696Z",
+  "baseUrl": "http://localhost:8001",
+  "jobId": "ac9de9a7-dc0e-4386-bec7-6cabc384c865",
+  "sessionId": "23adcb77-df39-4da4-bbec-288d62fc93b7",
+  "results": [
+    {
+      "name": "TEST 2 — GET /api/v1/jobs (auth)",
+      "pass": true,
+      "ms": 2481,
+      "status": 200,
+      "body": {
+        "data": [
+          {
+            "id": "e0e35a9c-500a-420b-abf6-81770c6dc305",
+            "title": "Senior Software Engineer 1773304029061",
+            "company": "Stripe",
+            "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+            "createdAt": "2026-03-12T08:27:11.409Z"
+          },
+          {
+            "id": "fd29e8e1-dc8a-4601-b748-0487de32c9e1",
+            "title": "Senior Software Engineer",
+            "company": "Stripe",
+            "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+            "createdAt": "2026-03-12T07:46:58.295Z"
+          },
+          {
+            "id": "12d22819-702b-49db-a4f1-558b8e61870b",
+            "title": "Senior Software Engineer",
+            "company": "Stripe",
+            "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+            "createdAt": "2026-03-12T07:40:14.120Z"
+          }
+        ]
+      },
+      "timeTakenMs": 2479
+    },
+    {
+      "name": "TEST 3 — POST /api/v1/jobs (create)",
+      "pass": true,
+      "ms": 803,
+      "status": 201,
+      "body": {
+        "data": {
+          "id": "ac9de9a7-dc0e-4386-bec7-6cabc384c865",
+          "userId": "57cb807a-84d2-4709-88e4-cfd06d77b8c2",
+          "title": "Senior Software Engineer",
+          "company": "Stripe",
+          "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+          "createdAt": "2026-03-12T08:30:40.389Z"
+        }
+      },
+      "JOB_ID": "ac9de9a7-dc0e-4386-bec7-6cabc384c865",
+      "timeTakenMs": 803
+    },
+    {
+      "name": "TEST 3b — GET /api/v1/jobs contains JOB_ID",
+      "pass": true,
+      "ms": 919,
+      "status": 200,
+      "body": {
+        "count": 4
+      },
+      "timeTakenMs": 917
+    },
+    {
+      "name": "TEST 4 — GET /api/v1/jobs/JOB_ID",
+      "pass": true,
+      "ms": 1131,
+      "status": 200,
+      "body": {
+        "data": {
+          "id": "ac9de9a7-dc0e-4386-bec7-6cabc384c865",
+          "title": "Senior Software Engineer",
+          "company": "Stripe",
+          "jobDescription": "We are looking for a senior software engineer with 5+ years of experience in distributed systems, TypeScript, and React. The ideal candidate has experience with payment systems and high-scale infrastructure.",
+          "createdAt": "2026-03-12T08:30:40.389Z"
+        }
+      },
+      "timeTakenMs": 1131
+    },
+    {
+      "name": "TEST 5 — POST /api/v1/jobs/JOB_ID/sessions",
+      "pass": true,
+      "ms": 16356,
+      "status": 201,
+      "body": {
+        "data": {
+          "session": {
+            "id": "23adcb77-df39-4da4-bbec-288d62fc93b7",
+            "userId": "57cb807a-84d2-4709-88e4-cfd06d77b8c2",
+            "jobId": "ac9de9a7-dc0e-4386-bec7-6cabc384c865",
+            "personaId": "f260fb2e-be67-41fd-8c0b-8ed7e1e1a095",
+            "voiceId": null,
+            "scenarioType": "technical",
+            "difficultyLevel": "medium",
+            "status": "in_progress",
+            "livekitRoomName": null,
+            "startedAt": "2026-03-12T08:30:52.335Z",
+            "endedAt": null,
+            "durationSeconds": null,
+            "overallScore": null,
+            "feedback": null,
+            "createdAt": "2026-03-12T08:30:52.335Z",
+            "updatedAt": "2026-03-12T08:30:52.335Z"
+          },
+          "livekitToken": "eyJhbGciOiJIUzI1NiJ9.eyJuYW1lIjoiNTdjYjgwN2EtODRkMi00NzA5LTg4ZTQtY2ZkMDZkNzdiOGMyIiwidmlkZW8iOnsicm9vbUpvaW4iOnRydWUsInJvb20iOiIyM2FkY2I3Ny1kZjM5LTRkYTQtYmJlYy0yODhkNjJmYzkzYjciLCJjYW5QdWJsaXNoIjp0cnVlLCJjYW5TdWJzY3JpYmUiOnRydWV9LCJpc3MiOiJBUElYNVluQVBkRVpkYjkiLCJleHAiOjE3NzMzMDc4NTQsIm5iZiI6MCwic3ViIjoiNTdjYjgwN2EtODRkMi00NzA5LTg4ZTQtY2ZkMDZkNzdiOGMyIn0.t3nXsIcegoj9bcxihECP6Yi8v3if_f5ok5kOY7C5m7Y"
+        }
+      },
+      "SESSION_ID": "23adcb77-df39-4da4-bbec-288d62fc93b7",
+      "timeTakenMs": 16356
+    },
+    {
+      "name": "TEST 6 — Socket.io interview flow",
+      "pass": true,
+      "ms": 18503,
+      "status": 0,
+      "body": {
+        "joined": {
+          "sessionId": "23adcb77-df39-4da4-bbec-288d62fc93b7"
+        },
+        "tokenCount": 103,
+        "aiTextLen": 348,
+        "ended": {
+          "sessionId": "23adcb77-df39-4da4-bbec-288d62fc93b7"
+        },
+        "eventLog": [
+          "connect",
+          "session_joined",
+          "ai_thinking",
+          "ai_thinking",
+          "ai_response",
+          "session_ended"
+        ]
+      }
+    },
+    {
+      "name": "TEST 7 — Feedback completion (poll)",
+      "pass": false,
+      "ms": 154150,
+      "error": "Error: Timed out waiting for status=completed (last status: completed)"
+    },
+    {
+      "name": "TEST 8 — GET /api/v1/jobs (no auth)",
+      "pass": true,
+      "ms": 22,
+      "status": 401,
+      "body": {
+        "error": "Unauthorized"
+      },
+      "timeTakenMs": 17
+    }
+  ]
+}
