@@ -18,7 +18,6 @@ declare function createSession(userId: string, jobId: string, scenarioType: Scen
         overallScore: number | null;
         feedback: import("@prisma/client/runtime/client").JsonValue | null;
     };
-    livekitToken: any;
 }>;
 declare function getSessions(jobId: string, userId: string): Promise<{
     score: number | null;
@@ -29,8 +28,30 @@ declare function getSessions(jobId: string, userId: string): Promise<{
     overallScore: number | null;
     feedback: import("@prisma/client/runtime/client").JsonValue;
 }[]>;
+declare function getSession(sessionId: string, userId: string): Promise<{
+    id: string;
+    job: {
+        title: string;
+        company: string;
+    } | null;
+    scenarioType: string;
+    status: string;
+    startedAt: Date;
+    endedAt: Date | null;
+}>;
+declare function endSession(sessionId: string, userId: string): Promise<{
+    id: string;
+    status: string;
+}>;
+declare function getLiveToken(sessionId: string, userId: string, scenarioType?: ScenarioType): Promise<{
+    token: string;
+    model: string;
+}>;
 export declare const sessionService: {
     readonly createSession: typeof createSession;
     readonly getSessions: typeof getSessions;
+    readonly getSession: typeof getSession;
+    readonly endSession: typeof endSession;
+    readonly getLiveToken: typeof getLiveToken;
 };
 export {};

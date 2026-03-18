@@ -5,92 +5,77 @@ const gemeni_1 = require("../../../config/gemeni");
 const messages_1 = require("@langchain/core/messages");
 const gemini_retry_1 = require("../gemini-retry");
 const questionNode = async (state) => {
-    const extractTopics = (jobContext) => {
-        const t = [];
-        const s = (jobContext || "").toLowerCase();
-        const add = (label, patterns) => {
-            if (t.includes(label))
-                return;
-            if (patterns.some((p) => p.test(s)))
-                t.push(label);
-        };
-        add("Next.js", [/next\.js/, /\bnextjs\b/]);
-        add("React", [/\breact\b/]);
-        add("Node.js", [/\bnode\.js\b/, /\bnodejs\b/, /\bnode\b/]);
-        add("Postgres", [/\bpostgres\b/, /\bpostgresql\b/]);
-        add("Prisma", [/\bprisma\b/]);
-        add("Authentication", [/\bauth\b/, /\boauth\b/, /\bjwt\b/, /\bsso\b/]);
-        add("System Design", [/\bsystem design\b/, /\barchitecture\b/, /\bscalab/i]);
-        add("Testing", [/\btest\b/, /\bjest\b/, /\bplaywright\b/, /\bcypress\b/]);
-        add("Performance", [/\bperformance\b/, /\blatency\b/, /\boptimi/i]);
-        add("DevOps", [/\bdocker\b/, /\bkubernetes\b/, /\bci\/cd\b/, /\bterraform\b/]);
-        return t.length ? t : ["Backend APIs", "Databases", "Frontend Architecture"];
-    };
-    const lastHuman = [...(state.messages ?? [])].reverse().find((m) => m instanceof messages_1.HumanMessage);
+    const conversationHistory = state.messages
+        .map((m) => m instanceof messages_1.HumanMessage
+        ? `Candidate: ${m.content}`
+        : `Interviewer: ${m.content}`)
+        .join("\n");
+    const lastHuman = [...(state.messages ?? [])]
+        .reverse()
+        .find((m) => m instanceof messages_1.HumanMessage);
     const lastAnswer = typeof lastHuman?.content === "string" ? lastHuman.content.trim() : "";
-    const lastAnswerWords = lastAnswer ? lastAnswer.split(/\s+/).filter(Boolean).length : 0;
-    const isVagueOrEmpty = !lastAnswer ||
-        (lastAnswer.length < 40 && lastAnswerWords < 7) ||
-        /^\(audio received;.*\)$/i.test(lastAnswer) ||
-        /transcription/i.test(lastAnswer);
-    const buildFallbackQuestion = () => {
-        if (isVagueOrEmpty && (state.questionCount ?? 0) > 0) {
-            return "I didn't catch enough detail there. Can you restate your answer with a concrete example and what you specifically did?";
-        }
-        const topics = extractTopics(state.jobContext || "");
-        const topic = topics[(state.questionCount ?? 0) % topics.length];
-        const scenario = (state.scenarioType || "technical").toString();
-        const templatesByScenario = {
-            technical: [
-                `Let's go deeper on ${topic}. Can you describe a real system you built using it, and walk me through the architecture and key tradeoffs?`,
-                `In ${topic}, what are the top 2 or 3 failure modes you've seen in production, and how do you detect and fix them?`,
-                `Pick one challenging bug or incident related to ${topic}. How did you investigate it and what was the root cause?`,
-            ],
-            background: [
-                `Tell me about a recent project most relevant to this role. What was your responsibility and what did you ship?`,
-                `What's a technical decision you're proud of recently, and what alternatives did you consider?`,
-                `Describe a time you had to learn something new quickly for a project. What was it and how did you approach it?`,
-            ],
-            culture: [
-                `Tell me about a time you disagreed with a teammate on a technical approach. How did you handle it?`,
-                `How do you keep stakeholders aligned when requirements change mid-project? Give a concrete example.`,
-                `What does "high quality" mean to you in a codebase, and how do you drive that in a team?`,
-            ],
-        };
-        const list = templatesByScenario[scenario] ?? templatesByScenario.technical;
-        return list[(state.questionCount ?? 0) % list.length];
-    };
+    const isClarificationRequest = lastAnswer &&
+        /what do you mean|can you (explain|clarify|rephrase|elaborate)|i (don't|dont) understand|could you repeat|what is the question|please clarify/i.test(lastAnswer);
+    const isVague = lastAnswer.length > 0 &&
+        lastAnswer.split(/\s+/).length < 8 &&
+        !isClarificationRequest;
     const buildQuestionPrompt = () => `
 You are ${state.personaContext}
 
-You are conducting a professional job interview.
-This is question ${state.questionCount + 1} of ${state.maxQuestions}.
-
-Rules:
-- Ask ONE question at a time
-- If the candidate's last answer was vague, too short, or unclear — ask a follow-up on the SAME topic before moving on
-- If the answer was complete and satisfactory — move to the next topic
-- Adapt difficulty based on previous answers
-- Never break character
-
+You are conducting a ${state.scenarioType} interview for this role:
 <job_description>
 ${state.jobContext}
 </job_description>
 
+This is turn ${state.questionCount + 1} of ${state.maxQuestions} maximum questions.
+
 <conversation_history>
-${state.messages
-        .map((m) => m instanceof messages_1.HumanMessage
-        ? `Candidate: ${m.content}`
-        : `Interviewer: ${m.content}`)
-        .join("\n")}
+${conversationHistory || "No conversation yet. This is the opening of the interview."}
 </conversation_history>
 
-Ask your next question now.
+<rules>
+RULE 1 — CLARIFICATION:
+${isClarificationRequest
+        ? `The candidate is asking for clarification. 
+     Rephrase or explain your last question clearly in 1-2 sentences.
+     Do NOT ask a new question. Do NOT move to a new topic.
+     Just clarify what you already asked.`
+        : ""}
+
+RULE 2 — VAGUE ANSWER:
+${isVague && state.questionCount > 0
+        ? `The candidate's last answer was too short or vague.
+     Ask a follow-up on the EXACT same topic.
+     Do NOT move to a new topic yet.`
+        : ""}
+
+RULE 3 — NORMAL FLOW (applies when not clarifying and answer was complete):
+- Acknowledge the answer in ONE brief sentence (e.g. "Got it." / "That makes sense.")
+- Then ask the next relevant question based on the job description and conversation so far
+- Choose a topic not yet covered in the conversation history
+- Dig deeper into technical skills, past experience, or problem solving relevant to the role
+
+RULE 4 — ALWAYS:
+- Ask exactly ONE question per response
+- Never ask a question already asked in the conversation history
+- Keep your full response under 5 sentences
+- Do not use bullet points or lists
+- Stay in character as the interviewer with your personality traits
+- Do not say "As an AI" or break character
+
+${state.questionCount + 1 >= state.maxQuestions
+        ? "RULE 5 — FINAL QUESTION: This is your last question. Make it count — ask something that reveals the candidate's depth."
+        : ""}
+</rules>
+
+Respond now as the interviewer.
 `;
-    const fallbackQuestion = buildFallbackQuestion();
-    const text = await (0, gemini_retry_1.geminiGenerateContentWithRetry)(() => gemeni_1.model.generateContent(buildQuestionPrompt()), 
-    // Keep the conversation snappy: if Gemini is slow or rate-limited, use a dynamic fallback.
-    { fallbackText: fallbackQuestion, timeoutMs: 2500, maxAttempts: 1 });
+    const fallbackQuestion = state.questionCount === 0
+        ? "Tell me about yourself and what drew you to apply for this role."
+        : isClarificationRequest
+            ? "Let me rephrase — I was asking about your approach to solving that type of problem in practice. Could you walk me through a specific example?"
+            : "Could you elaborate on your last answer with a concrete example from your experience?";
+    const text = await (0, gemini_retry_1.geminiGenerateContentWithRetry)(() => gemeni_1.model.generateContent(buildQuestionPrompt()), { fallbackText: fallbackQuestion, timeoutMs: 8000, maxAttempts: 2 });
     return {
         messages: [new messages_1.AIMessage(text)],
         currentQuestion: text,

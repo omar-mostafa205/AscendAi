@@ -36,13 +36,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createSession = exports.getSessions = void 0;
+exports.getLiveToken = exports.endSession = exports.getSession = exports.createSession = exports.getSessions = void 0;
 const Sentry = __importStar(require("@sentry/node"));
 const logger_1 = __importDefault(require("../../config/logger"));
 const session_service_1 = require("./session.service");
 const zod_1 = require("zod");
 const createSessionSchema = zod_1.z.object({
     scenarioType: zod_1.z.enum(["technical", "background", "culture"]),
+});
+const sessionIdSchema = zod_1.z.string().uuid();
+const liveTokenBodySchema = zod_1.z.object({
+    scenarioType: zod_1.z.enum(["technical", "background", "culture"]).optional(),
 });
 const getSessions = async (req, res) => {
     try {
@@ -91,4 +95,73 @@ const createSession = async (req, res) => {
     }
 };
 exports.createSession = createSession;
+const getSession = async (req, res) => {
+    const sessionId = req.params.id;
+    if (!sessionIdSchema.safeParse(sessionId).success) {
+        res.status(404).json({ error: "Session not found" });
+        return;
+    }
+    try {
+        const session = await session_service_1.sessionService.getSession(sessionId, req.user.id);
+        res.status(200).json({ data: session });
+    }
+    catch (error) {
+        logger_1.default.error("Failed to get session", { error, userId: req.user.id, sessionId });
+        if (error instanceof Error && error.message.startsWith("Session not found")) {
+            res.status(404).json({ error: "Session not found" });
+            return;
+        }
+        Sentry.captureException(error, { extra: { userId: req.user.id, sessionId } });
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+exports.getSession = getSession;
+const endSession = async (req, res) => {
+    const sessionId = req.params.id;
+    if (!sessionIdSchema.safeParse(sessionId).success) {
+        res.status(404).json({ error: "Session not found" });
+        return;
+    }
+    try {
+        const result = await session_service_1.sessionService.endSession(sessionId, req.user.id);
+        res.status(200).json({ data: result });
+    }
+    catch (error) {
+        logger_1.default.error("Failed to end session", { error, userId: req.user.id, sessionId });
+        if (error instanceof Error && error.message.startsWith("Session not found")) {
+            res.status(404).json({ error: "Session not found" });
+            return;
+        }
+        Sentry.captureException(error, { extra: { userId: req.user.id, sessionId } });
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+exports.endSession = endSession;
+const getLiveToken = async (req, res) => {
+    const sessionId = req.params.id;
+    if (!sessionIdSchema.safeParse(sessionId).success) {
+        res.status(404).json({ error: "Session not found" });
+        return;
+    }
+    const validated = liveTokenBodySchema.safeParse(req.body);
+    if (!validated.success) {
+        res.status(400).json({ error: validated.error.flatten().fieldErrors });
+        return;
+    }
+    try {
+        const tokenData = await session_service_1.sessionService.getLiveToken(sessionId, req.user.id, validated.data.scenarioType);
+        res.status(200).json({ data: tokenData });
+    }
+    catch (error) {
+        logger_1.default.error("Failed to get live token", { error, userId: req.user.id, sessionId });
+        if (error instanceof Error &&
+            (error.message.startsWith("Session not found") || error.message === "Session job not found")) {
+            res.status(404).json({ error: "Session not found" });
+            return;
+        }
+        Sentry.captureException(error, { extra: { userId: req.user.id, sessionId } });
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+exports.getLiveToken = getLiveToken;
 //# sourceMappingURL=session.controller.js.map

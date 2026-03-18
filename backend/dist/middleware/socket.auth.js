@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.socketAuthMiddleware = void 0;
 const supabase_1 = require("../config/supabase");
 const node_1 = require("@sentry/node");
-const ensure_profile_1 = require("../services/user/ensure-profile");
 const socketAuthMiddleware = async (socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
@@ -27,12 +26,6 @@ const socketAuthMiddleware = async (socket, next) => {
         }
         socket.data.userId = data.user.id;
         socket.data.email = data.user.email;
-        await (0, ensure_profile_1.ensureUserProfile)({
-            id: data.user.id,
-            email: data.user.email ?? "",
-            name: data.user.user_metadata?.name ?? null,
-            avatarUrl: data.user.user_metadata?.avatar_url ?? null,
-        });
         next();
     }
     catch (error) {

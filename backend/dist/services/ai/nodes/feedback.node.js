@@ -8,8 +8,6 @@ const technical_prompt_1 = require("../prompts/technical.prompt");
 const messages_1 = require("@langchain/core/messages");
 const gemini_retry_1 = require("../gemini-retry");
 const feedbackNode = async (state) => {
-    // During the live interview loop we do not generate full feedback on every turn.
-    // Final feedback is generated in the analysis worker after `end_session`.
     if (!state.isComplete) {
         return {};
     }

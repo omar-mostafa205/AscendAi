@@ -13,7 +13,7 @@ export const SessionService = {
     ApiClient.get<ApiEnvelope<Session[]>>(`/jobs/${jobId}/sessions`),
 
   createSession: (jobId: string, data: CreateSessionInput) =>
-    ApiClient.post<ApiEnvelope<{ session: Session; livekitToken: string }>, CreateSessionInput>(
+    ApiClient.post<ApiEnvelope<{ session: Session }>, CreateSessionInput>(
       `/jobs/${jobId}/sessions`,
       data
     ),
@@ -23,11 +23,16 @@ export const SessionService = {
       ApiEnvelope<
         Session & {
           job?: { title: string; company: string }
-          livekitToken?: string | null
         }
       >
     >(`/sessions/${sessionId}`),
 
   endSession: (sessionId: string) =>
     ApiClient.post<ApiEnvelope<{ id: string; status: string }>>(`/sessions/${sessionId}/end`, {}),
+
+  getLiveToken: (sessionId: string, scenarioType: ScenarioType) =>
+    ApiClient.post<ApiEnvelope<{ token: string; model?: string }>>(
+      `/sessions/${sessionId}/live-token`,
+      { scenarioType }
+    ),
 } as const

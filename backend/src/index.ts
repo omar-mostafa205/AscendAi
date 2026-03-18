@@ -7,6 +7,14 @@ import * as Sentry from "@sentry/node"
 import { startSessionWorker } from "./queues/workers/session-analysis.worker"
 import { env } from "./config/env"
 
+// If you pipe `npm run dev | rg ...` and then stop `rg`, Node can crash with EPIPE
+// when writing to a closed stdout/stderr. Swallow it to keep dev experience stable.
+for (const s of [process.stdout, process.stderr]) {
+  s.on("error", (err: any) => {
+    if (err?.code === "EPIPE") process.exit(0)
+  })
+}
+
 async function bootstrap() {
   try {
     initSentry()

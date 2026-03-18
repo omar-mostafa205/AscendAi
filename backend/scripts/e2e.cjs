@@ -280,7 +280,12 @@ async function main() {
         token: TOKEN,
         body: { scenarioType: "technical" },
       })
-      const ok = status === 201 && isObject(body) && isObject(body.data) && isObject(body.data.session) && typeof body.data.livekitToken === "string"
+      const ok =
+        status === 201 &&
+        isObject(body) &&
+        isObject(body.data) &&
+        isObject(body.data.session) &&
+        typeof body.data.session.id === "string"
       if (ok) SESSION_ID = body.data.session.id
       return { pass: ok, status, body }
     })
@@ -338,21 +343,6 @@ async function main() {
           })
         })
 
-      const waitForTokens = (timeoutMs) =>
-        new Promise((resolve, reject) => {
-          let count = 0
-          const onTok = () => {
-            count += 1
-          }
-          socket.on("ai_token", onTok)
-          const t = setTimeout(() => {
-            socket.off("ai_token", onTok)
-            if (count > 0) resolve(count)
-            else reject(new Error("No ai_token received"))
-          }, timeoutMs)
-          if (typeof t.unref === "function") t.unref()
-        })
-
       const onErr = (payload) => {
         console.error("socket error:", payload)
       }
@@ -363,16 +353,13 @@ async function main() {
       socket.emit("join_session", { sessionId: SESSION_ID })
       await waitFor("session_joined", 15000)
 
-      socket.emit("user_answer", {
+      // Live interview audio is now handled directly by Gemini Live from the browser.
+      // We only verify that the socket join/end plumbing still works.
+      socket.emit("live_message", {
         sessionId: SESSION_ID,
-        audioBuffer: Buffer.from(SILENCE_WAV_BASE64, "base64"),
+        role: "user",
+        content: "Hello! This is an automated E2E message.",
       })
-
-      await waitFor("ai_thinking", 15000)
-      const tokenCount = await waitForTokens(60000)
-      const resp = await waitFor("ai_response", 60000)
-
-      const okResp = resp && typeof resp.text === "string" && resp.text.length > 0 && resp.audio !== undefined
 
       socket.emit("end_session", { sessionId: SESSION_ID })
       const ended = await waitFor("session_ended", 20000)
@@ -380,8 +367,8 @@ async function main() {
       socket.off("error", onErr)
       socket.disconnect()
 
-      const ok = okResp && tokenCount > 0 && ended && ended.sessionId === SESSION_ID
-      return { pass: ok, status: 0, body: { tokenCount, aiTextLen: resp && resp.text ? resp.text.length : 0, ended } }
+      const ok = ended && ended.sessionId === SESSION_ID
+      return { pass: ok, status: 0, body: { ended } }
     })
   )
 

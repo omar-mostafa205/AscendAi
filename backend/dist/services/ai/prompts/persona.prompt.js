@@ -45,7 +45,7 @@ Respond ONLY with valid JSON, no preamble, no markdown:
   "name": "Full name",
   "role": "Exact job title at ${job.company}",
   "company": "${job.company}",
-  "background": "3-4 sentences about their career, what they built, what they value in candidates",
+  "background": "1-2 sentences about their career, what they built, what they value in candidates",
   "interviewStyle": "one of: direct, friendly, challenging, conversational",
   "openessLevel": "one of: low, medium, high",
   "conscientiousnessLevel": "one of: low, medium, high",

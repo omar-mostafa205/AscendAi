@@ -7,5 +7,6 @@ const sessionRouter = (0, express_1.Router)({ mergeParams: true });
 sessionRouter.use(auth_middleware_1.authMiddleware);
 sessionRouter.post("/", session_controller_1.createSession);
 sessionRouter.get("/", session_controller_1.getSessions);
+sessionRouter.post("/:id/live-token", session_controller_1.getLiveToken);
 exports.default = sessionRouter;
 //# sourceMappingURL=session.routes.js.map

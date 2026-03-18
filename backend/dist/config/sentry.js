@@ -38,7 +38,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initSentry = void 0;
 const Sentry = __importStar(require("@sentry/node"));
-const profiling_node_1 = require("@sentry/profiling-node");
 const logger_1 = __importDefault(require("../config/logger"));
 const initSentry = () => {
     if (!process.env.SENTRY_DSN) {
@@ -46,18 +45,29 @@ const initSentry = () => {
         return;
     }
     const isProduction = process.env.NODE_ENV === 'production';
+    const nodeMajor = Number(process.versions.node.split(".")[0] ?? "0");
+    const profilingSupported = [16, 18, 20, 22, 24].includes(nodeMajor);
+    // Avoid importing @sentry/profiling-node on unsupported Node versions to prevent warnings/crashes.
+    const integrations = [Sentry.googleGenAIIntegration()];
+    if (profilingSupported) {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { nodeProfilingIntegration } = require("@sentry/profiling-node");
+            integrations.unshift(nodeProfilingIntegration());
+        }
+        catch (e) {
+            logger_1.default.warn("Sentry profiling integration failed to load; continuing without profiling", { error: e });
+        }
+    }
     Sentry.init({
         dsn: process.env.SENTRY_DSN,
         environment: process.env.NODE_ENV || 'development',
         tracesSampleRate: isProduction ? 0.1 : 1.0,
-        profilesSampleRate: isProduction ? 0.1 : 1.0,
+        profilesSampleRate: profilingSupported ? (isProduction ? 0.1 : 1.0) : 0,
         debug: process.env.NODE_ENV === 'development',
         attachStacktrace: true,
         enabled: isProduction,
-        integrations: [
-            (0, profiling_node_1.nodeProfilingIntegration)(),
-            Sentry.googleGenAIIntegration(),
-        ],
+        integrations,
     });
 };
 exports.initSentry = initSentry;

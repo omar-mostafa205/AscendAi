@@ -172,7 +172,7 @@ export default function JobsPage() {
                         border: "2px solid #b9b1ab",
                         borderRadius: "12px",
                       }}
-                      formatter={(value: number) => [`${value}`, "Score"]}
+                      formatter={(value?: number) => [`${value ?? 0}`, "Score"]}
                       labelFormatter={(label) =>
                         `Session ${label} · ${stats.scoreProgression[label - 1]?.date ?? ""}`
                       }

@@ -1,73 +1,86 @@
 import { prisma } from "../config/database"
 import logger from "../config/logger"
 import { analysisQueue } from "../queues/session-analysis-queue"
-import createInterviewGraph from "../services/ai/graphs/interview-graph"
-import { deepgramService } from "../services/voice/deepgram.service"
 import * as Sentry from "@sentry/node"
-import { HumanMessage } from "@langchain/core/messages"
 import { Server, Socket } from "socket.io"
 
 type JoinPayload = string | { sessionId: string }
 
-type UserAnswerPayload = {
+type SaveMessagePayload = {
   sessionId: string
-  audioBuffer: any
-  mimeType?: string
+  role: "user" | "assistant"
+  content: string
 }
 
-// Prevent overlapping processing for the same session (which can cause repeated questions).
-const inFlightBySessionId = new Set<string>()
-const pendingBySessionId = new Map<string, UserAnswerPayload>()
-let graphInstance: Awaited<ReturnType<typeof createInterviewGraph>> | null = null
+const activeSocketIdBySessionUserKey = new Map<string, string>()
+const disconnectTimersBySessionId = new Map<string, NodeJS.Timeout>()
 
-async function getGraph() {
-  if (!graphInstance) graphInstance = await createInterviewGraph()
-  return graphInstance
-}
-
-function sanitizeAudioContentType(mimeType: unknown): string {
-  if (typeof mimeType !== "string") return "audio/webm"
-  const v = mimeType.trim().toLowerCase()
-  if (!v || !v.startsWith("audio/")) return "audio/webm"
-  // Keep codecs if present; Deepgram can use it, and stripping it can hurt for some browsers.
-  return v
-}
-
-function normalizeToBuffer(raw: any): Buffer {
-  if (!raw) return Buffer.alloc(0)
-  if (Buffer.isBuffer(raw)) return raw
-  if (raw instanceof ArrayBuffer) return Buffer.from(new Uint8Array(raw))
-  // socket.io can sometimes send { type: "Buffer", data: number[] }
-  if (raw?.type === "Buffer" && Array.isArray(raw.data)) return Buffer.from(raw.data)
-  if (raw?.data && Array.isArray(raw.data)) return Buffer.from(raw.data)
-  if (Array.isArray(raw)) return Buffer.from(raw)
-  if (ArrayBuffer.isView(raw)) return Buffer.from(raw as any)
-  return Buffer.from(raw as any)
+function clearDisconnectTimer(sessionId: string) {
+  const timer = disconnectTimersBySessionId.get(sessionId)
+  if (timer) {
+    clearTimeout(timer)
+    disconnectTimersBySessionId.delete(sessionId)
+  }
 }
 
 export const registerSessionHandlers = (io: Server, socket: Socket) => {
   const userId = socket.data.userId as string
+  const joinedSessionIds = new Set<string>()
 
   socket.on("join_session", async (payload: JoinPayload) => {
     const sessionId = typeof payload === "string" ? payload : payload?.sessionId
+    
     if (!sessionId) {
       socket.emit("error", { message: "Missing sessionId" })
       return
     }
 
     try {
+      clearDisconnectTimer(sessionId)
+
       const session = await prisma.interviewSession.findFirst({
         where: { id: sessionId, userId },
-        include: { persona: true, job: true },
+        select: { id: true, status: true },
       })
+
       if (!session) {
         socket.emit("error", { message: "Session not found or access denied" })
         return
       }
 
-      socket.join(sessionId)
-      logger.info("User joined session", { sessionId, userId })
+      if (session.status === "completed" || session.status === "processing") {
+        socket.emit("error", { message: "Session already ended" })
+        return
+      }
 
+      if (joinedSessionIds.has(sessionId)) {
+        socket.join(sessionId)
+        socket.emit("session_joined", { sessionId })
+        return
+      }
+
+      const sessionUserKey = `${sessionId}:${userId}`
+      const existingSocketId = activeSocketIdBySessionUserKey.get(sessionUserKey)
+      
+      if (existingSocketId && existingSocketId !== socket.id) {
+        const oldSocket = io.sockets.sockets.get(existingSocketId)
+        if (oldSocket) {
+          oldSocket.leave(sessionId)
+          oldSocket.disconnect(true)
+        }
+      }
+      
+      activeSocketIdBySessionUserKey.set(sessionUserKey, socket.id)
+
+      socket.join(sessionId)
+      joinedSessionIds.add(sessionId)
+      
+      logger.info("User joined session", { 
+        service: "AscendAI", 
+        sessionId, 
+        userId 
+      })
+      
       socket.emit("session_joined", { sessionId })
     } catch (error) {
       Sentry.captureException(error)
@@ -76,183 +89,118 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
     }
   })
 
-  const processUserAnswer = async ({ sessionId, audioBuffer, mimeType }: UserAnswerPayload) => {
-    if (!sessionId) {
-      socket.emit("error", { message: "Missing sessionId" })
+  socket.on("save_message", async (payload: SaveMessagePayload) => {
+    const { sessionId, role, content } = payload || {}
+    
+    if (!sessionId || !role || !content?.trim()) {
       return
     }
 
-    socket.emit("ai_thinking")
-
-    const audio = normalizeToBuffer(audioBuffer)
-    logger.info("user_answer received", {
-      sessionId,
-      userId,
-      rawType: typeof audioBuffer,
-      audioBytes: audio.length,
-      mimeType,
-    })
-
-    // Ignore tiny blobs that commonly occur from accidental clicks or VAD tail.
-    // These often fail STT ("corrupt or unsupported data") and cause the AI to repeat questions.
-    const MIN_AUDIO_BYTES = 200
-    if (audio.length > 0 && audio.length < MIN_AUDIO_BYTES) {
-      logger.info("Dropping tiny audio blob", { sessionId, userId, audioBytes: audio.length })
+    const trimmedContent = content.trim()
+    
+    if (trimmedContent.length > 8000) {
+      logger.warn("Message too long", { sessionId, userId, length: trimmedContent.length })
       return
     }
 
-    const session = await prisma.interviewSession.findFirst({
-      where: { id: sessionId, userId },
-      include: { persona: true, job: true },
-    })
-    if (!session) {
-      socket.emit("error", { message: "Session not found or access denied" })
-      return
-    }
-
-    let transcript = ""
-    if (audio.length) {
-      const contentType = sanitizeAudioContentType(mimeType)
-      transcript = await deepgramService.transcribeAudio(audio, contentType)
-    }
-
-    if (!transcript?.trim() && audio.length) {
-      socket.emit("ai_response", {
-        text: "I couldn't hear that clearly. Please repeat your answer (or speak a bit louder).",
-        audio: null,
-      })
-      return
-    }
-
-    logger.info("Received user answer", {
-      sessionId,
-      userId,
-      audioBytes: audio.length,
-      transcriptLen: transcript.length,
-    })
-
-    // Persist user message so analysis can run even if LangGraph checkpointing fails.
     try {
-      await prisma.interviewMessage.create({
-        data: { sessionId, role: "user", content: transcript },
+      const session = await prisma.interviewSession.findFirst({
+        where: { id: sessionId, userId },
+        select: { id: true, status: true },
       })
-    } catch (e) {
-      logger.warn("Failed to persist user message", { sessionId, error: e })
-    }
 
-    const jobContext = session.job
-      ? `Job Title: ${session.job.title}\nCompany: ${session.job.company}\nDescription: ${session.job.jobDescription}`
-      : ""
-    const personaContext = session.persona
-      ? `You are ${session.persona.name}, ${session.persona.role} at ${session.persona.company}.\nInterview style: ${session.persona.interviewStyle}\nBackground: ${session.persona.background}`
-      : ""
-
-    const graph = await getGraph()
-    const stream = await graph.stream(
-      {
-        messages: [new HumanMessage(transcript)],
-        scenarioType: session.scenarioType,
-        jobContext,
-        personaContext,
-      },
-      { configurable: { thread_id: sessionId }, streamMode: "messages" }
-    )
-
-    let aiResponse = ""
-    for await (const [message, metadata] of stream) {
-      if (
-        metadata.langgraph_node === "question" &&
-        message.content &&
-        !message.additional_kwargs?.tool_calls
-      ) {
-        const text = String(message.content)
-        const chunks = text.split(/(\s+)/).filter((c) => c.length > 0)
-        for (const token of chunks) {
-          aiResponse += token
-          socket.emit("ai_token", { token })
-        }
+      if (!session) {
+        logger.warn("save_message: session not found", { sessionId, userId })
+        return
       }
-    }
 
-    const finalText = aiResponse?.trim() || " "
+      if (session.status !== "active" && session.status !== "in_progress") {
+        logger.warn("save_message: session not active", { sessionId, userId, status: session.status })
+        return
+      }
 
-    // Persist assistant message for later feedback generation.
-    try {
-      await prisma.interviewMessage.create({
-        data: { sessionId, role: "assistant", content: finalText },
+      const existingMessage = await prisma.interviewMessage.findFirst({
+        where: {
+          sessionId,
+          role,
+          content: trimmedContent,
+          createdAt: {
+            gte: new Date(Date.now() - 5000)
+          }
+        },
       })
-    } catch (e) {
-      logger.warn("Failed to persist assistant message", { sessionId, error: e })
-    }
 
-    // Send text immediately (do not block on TTS).
-    socket.emit("ai_response", { text: finalText, audio: null })
+      if (existingMessage) {
+        logger.debug("Duplicate message ignored", { sessionId, role })
+        return
+      }
 
-    // Generate audio in the background and send separately.
-    deepgramService
-      .AudioToSpeech(finalText)
-      .then((audio) => socket.emit("ai_audio", { audio }))
-      .catch((e) => logger.warn("TTS failed", { sessionId, error: e }))
-  }
-
-  socket.on("user_answer", async (payload: UserAnswerPayload) => {
-    const sessionId = payload?.sessionId
-    if (!sessionId) {
-      socket.emit("error", { message: "Missing sessionId" })
-      return
-    }
-
-    if (inFlightBySessionId.has(sessionId)) {
-      pendingBySessionId.set(sessionId, payload)
-      logger.info("user_answer coalesced (in flight)", { sessionId, userId })
-      return
-    }
-
-    inFlightBySessionId.add(sessionId)
-    try {
-      await processUserAnswer(payload)
+      await prisma.interviewMessage.create({
+        data: { 
+          sessionId, 
+          role, 
+          content: trimmedContent 
+        },
+      })
+      
+      logger.debug("Message saved", { sessionId, role, length: trimmedContent.length })
     } catch (error) {
       Sentry.captureException(error)
-      logger.error("user_answer error", { error, sessionId, userId })
-      socket.emit("error", { message: "Failed to process user answer" })
-    } finally {
-      inFlightBySessionId.delete(sessionId)
-      const pending = pendingBySessionId.get(sessionId)
-      if (pending) {
-        pendingBySessionId.delete(sessionId)
-        // Process one queued payload (latest wins) to keep the conversation linear.
-        try {
-          inFlightBySessionId.add(sessionId)
-          await processUserAnswer(pending)
-        } catch (error) {
-          Sentry.captureException(error)
-          logger.error("user_answer error (pending)", { error, sessionId, userId })
-          socket.emit("error", { message: "Failed to process user answer" })
-        } finally {
-          inFlightBySessionId.delete(sessionId)
-        }
-      }
+      logger.error("save_message error", { sessionId, userId, role, error })
     }
   })
 
   socket.on("end_session", async ({ sessionId }: { sessionId: string }) => {
+    if (!sessionId) {
+      socket.emit("error", { message: "Missing sessionId" })
+      return
+    }
+
     try {
-      if (!sessionId) {
-        socket.emit("error", { message: "Missing sessionId" })
+      const session = await prisma.interviewSession.findFirst({
+        where: { id: sessionId, userId },
+        select: { id: true, status: true },
+      })
+
+      if (!session) {
+        socket.emit("error", { message: "Session not found or access denied" })
+        return
+      }
+
+      if (session.status === "completed" || session.status === "processing") {
+        socket.emit("error", { message: "Session already ended" })
         return
       }
 
       await prisma.interviewSession.updateMany({
         where: { id: sessionId, userId },
-        data: { status: "processing", endedAt: new Date() },
+        data: { 
+          status: "processing", 
+          endedAt: new Date() 
+        },
       })
 
-      await analysisQueue.add("analyze_session", { sessionId })
+      try {
+        await analysisQueue.add("analyze_session", { sessionId })
+      } catch (queueError) {
+        Sentry.captureException(queueError)
+        logger.error("Failed to enqueue analysis job", { sessionId, userId, error: queueError })
+      }
 
       io.to(sessionId).emit("session_ended", { sessionId })
       socket.leave(sessionId)
+      joinedSessionIds.delete(sessionId)
 
-      logger.info("Session ended, feedback job enqueued", { sessionId, userId })
+      const sessionUserKey = `${sessionId}:${userId}`
+      if (activeSocketIdBySessionUserKey.get(sessionUserKey) === socket.id) {
+        activeSocketIdBySessionUserKey.delete(sessionUserKey)
+      }
+
+      logger.info("Session ended, feedback job enqueued", { 
+        service: "AscendAI", 
+        sessionId, 
+        userId 
+      })
     } catch (error) {
       Sentry.captureException(error)
       logger.error("end_session error", { error, sessionId, userId })
@@ -261,7 +209,107 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
   })
 
   socket.on("leave_session", (sessionId: string) => {
+    if (!sessionId) return
+
     socket.leave(sessionId)
-    logger.info("User left session", { sessionId, socketId: socket.id, userId })
+    joinedSessionIds.delete(sessionId)
+    
+    const sessionUserKey = `${sessionId}:${userId}`
+    if (activeSocketIdBySessionUserKey.get(sessionUserKey) === socket.id) {
+      activeSocketIdBySessionUserKey.delete(sessionUserKey)
+    }
+    
+    logger.info("User left session", { 
+      service: "AscendAI", 
+      sessionId, 
+      socketId: socket.id, 
+      userId 
+    })
+  })
+
+  socket.on("disconnect", async (reason) => {
+    if (joinedSessionIds.size === 0) return
+
+    for (const sessionId of joinedSessionIds) {
+      const sessionUserKey = `${sessionId}:${userId}`
+      
+      if (activeSocketIdBySessionUserKey.get(sessionUserKey) === socket.id) {
+        activeSocketIdBySessionUserKey.delete(sessionUserKey)
+      }
+
+      clearDisconnectTimer(sessionId)
+      
+      const timer = setTimeout(async () => {
+        try {
+          const roomSize = io.sockets.adapter.rooms.get(sessionId)?.size ?? 0
+          if (roomSize > 0) {
+            logger.debug("Session still has active connections", { sessionId, roomSize })
+            return
+          }
+
+          const session = await prisma.interviewSession.findFirst({
+            where: { id: sessionId, userId },
+            select: { id: true, status: true },
+          })
+
+          if (!session) return
+          
+          if (session.status !== "in_progress" && session.status !== "active") {
+            logger.debug("Session not active, skipping auto-end", { sessionId, status: session.status })
+            return
+          }
+
+          const userMsgCount = await prisma.interviewMessage.count({
+            where: { sessionId, role: "user" },
+          })
+
+          if (userMsgCount === 0) {
+            logger.debug("No user messages, skipping auto-end", { sessionId })
+            return
+          }
+
+          await prisma.interviewSession.updateMany({
+            where: { id: sessionId, userId },
+            data: { 
+              status: "processing", 
+              endedAt: new Date() 
+            },
+          })
+
+          try {
+            await analysisQueue.add("analyze_session", { sessionId })
+          } catch (queueError) {
+            logger.error("Failed to enqueue analysis on disconnect", { 
+              sessionId, 
+              userId, 
+              error: queueError 
+            })
+          }
+
+          io.to(sessionId).emit("session_ended", { sessionId })
+          
+          logger.info("Session ended on disconnect", { 
+            service: "AscendAI", 
+            sessionId, 
+            userId, 
+            reason 
+          })
+        } catch (error) {
+          Sentry.captureException(error)
+          logger.error("Failed to end session on disconnect", { 
+            sessionId, 
+            userId, 
+            reason, 
+            error 
+          })
+        } finally {
+          disconnectTimersBySessionId.delete(sessionId)
+        }
+      }, 5000)
+
+      disconnectTimersBySessionId.set(sessionId, timer)
+    }
+
+    joinedSessionIds.clear()
   })
 }

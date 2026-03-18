@@ -1,7 +1,6 @@
 import { supabaseAdmin } from "../config/supabase";
 import { logger } from "@sentry/node";
 import { Socket } from "socket.io"
-import { ensureUserProfile } from "../services/user/ensure-profile"
 export const socketAuthMiddleware = async( socket : Socket, next : (err?: Error)=>void) => {
     const token = socket.handshake.auth.token;
     if (!token) {
@@ -25,13 +24,6 @@ export const socketAuthMiddleware = async( socket : Socket, next : (err?: Error)
     }
     socket.data.userId = data.user.id;
     socket.data.email = data.user.email
-
-    await ensureUserProfile({
-      id: data.user.id,
-      email: data.user.email ?? "",
-      name: (data.user.user_metadata as any)?.name ?? null,
-      avatarUrl: (data.user.user_metadata as any)?.avatar_url ?? null,
-    })
 
     next();
         

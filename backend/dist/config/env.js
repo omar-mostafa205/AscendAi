@@ -27,13 +27,10 @@ exports.envSchema = zod_1.z.object({
     SUPABASE_URL: zod_1.z.string(),
     SUPABASE_SERVICE_ROLE_KEY: zod_1.z.string(),
     DATABASE_URL: zod_1.z.string(),
+    GEMINI_LIVE_MODEL: zod_1.z.string().optional().default("gemini-2.0-flash-live-001"),
     GEMINI_API_KEY: zod_1.z.string(),
     GEMINI_MODEL: zod_1.z.string().optional().default("gemini-2.5-flash"),
     GEMINI_API_VERSION: zod_1.z.string().optional().default("v1beta"),
-    DEEPGRAM_API_KEY: zod_1.z.string(),
-    LIVEKIT_URL: zod_1.z.string(),
-    LIVEKIT_API_KEY: zod_1.z.string(),
-    LIVEKIT_API_SECRET: zod_1.z.string(),
     REDIS_URL: zod_1.z.string(),
 });
 const validateEnv = () => {

@@ -1,115 +1,106 @@
 import { Worker } from "bullmq"
-import { redisQueue } from "../../config/redis"
 import { prisma } from "../../config/database"
 import logger from "../../config/logger"
 import * as Sentry from "@sentry/node"
-import createInterviewGraph from "../../services/ai/graphs/interview-graph"
-import { Prisma } from "@prisma/client"
-import { feedbackNode } from "../../services/ai/nodes/feedback.node"
-import { AIMessage, HumanMessage } from "@langchain/core/messages"
+import { buildFeedbackPrompt } from "../../services/ai/prompts/feedback.prompt"
+import { redisQueue } from "../../config/redis"
+
+type ScenarioType = "technical" | "background" | "culture"
 
 export const startSessionWorker = async (): Promise<void> => {
-  const interviewGraph = await createInterviewGraph()
-
   const worker = new Worker(
     "session-analysis",
     async (job) => {
       const { sessionId } = job.data
-
-      logger.info("Session analysis started", { sessionId, jobId: job.id })
-
-      const state = await interviewGraph.getState({
-        configurable: { thread_id: sessionId },
-      })
-
-      let messages = (state.values.messages ?? []) as any[]
-
-      // If LangGraph state is empty, fall back to DB messages so we can still generate feedback.
-      if (!messages.length) {
-        const dbMessages = await prisma.interviewMessage.findMany({
-          where: { sessionId },
-          orderBy: { createdAt: "asc" },
-          select: { role: true, content: true },
-        })
-        messages = dbMessages.map((m) =>
-          m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content)
-        )
-      }
-
-      // If we *still* have no messages, do not call the model. Return a clear, deterministic fallback.
-      if (!messages.length) {
-        const fallback = {
-          strengths: [],
-          weaknesses: [],
-          recommendations: [
-            "Record at least one answer (unmute, speak, then mute) before ending the interview.",
-          ],
-          communicationScore: 0,
-          overallScore: 0,
-          summary:
-            "No conversation transcript was captured for this session, so feedback cannot be generated. Please record and submit at least one answer before ending the interview.",
-        }
-
-        await prisma.interviewSession.update({
-          where: { id: sessionId },
-          data: {
-            feedback: fallback as unknown as Prisma.InputJsonValue,
-            overallScore: 0,
-            status: "completed",
-          },
-        })
-
-        logger.info("Session analysis complete (no messages)", { sessionId, jobId: job.id })
-        return
-      }
-
-      let result: any
-      try {
-        // The feedback node only runs when the session is complete.
-        result = await feedbackNode({
-          ...(state.values as any),
-          messages,
-          isComplete: true,
-        })
-      } catch (e) {
-        logger.warn("Feedback node failed; using fallback feedback", { sessionId, error: e })
-        result = {
-          feedback: {
-            strengths: ["Clear communication"],
-            weaknesses: ["Needs more concrete examples"],
-            recommendations: ["Practice structured answers (STAR)"],
-            communicationScore: 70,
-            overallScore: 70,
-            summary:
-              "Good baseline interview performance. Improve by adding specific examples and measurable outcomes.",
-          },
-          overallScore: 70,
-        }
-      }
-
-      await prisma.interviewSession.update({
+      
+      const session = await prisma.interviewSession.findUnique({
         where: { id: sessionId },
-        data: {
-          feedback: (result.feedback ?? Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
-          overallScore: typeof result.overallScore === "number" ? result.overallScore : null,
-          status: "completed",
+        select: {
+          messages: {
+            orderBy: { createdAt: "asc" },
+            select: {
+              content: true,
+              role: true,
+            },
+          },
+          scenarioType: true,
         },
       })
 
-      logger.info("Session analysis complete", { sessionId, jobId: job.id })
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found`)
+      }
+
+      if (!session.messages || session.messages.length === 0) {
+        logger.warn("No messages found for session", { sessionId })
+        return null
+      }
+
+      const feedback = await createSessionFeedback(
+        session.messages, 
+        session.scenarioType as ScenarioType
+      )
+
+      await prisma.interviewSession.update({
+        where: { id: sessionId },
+        data: { 
+          feedback,
+          status: "completed"
+        },
+      })
+
+      logger.info("Session analysis complete", { 
+        sessionId, 
+        jobId: job.id 
+      })
+
+      return feedback
     },
-    { connection: redisQueue as any, concurrency: 5 }
+    {
+      // Use the same Redis connection config as the Queue (supports Upstash/rediss).
+      connection: redisQueue.options,
+    }
   )
 
-
   worker.on("completed", (job) => {
-    logger.info("Job completed", { jobId: job.id })
+    logger.info("Job completed", { 
+      service: "AscendAI",
+      jobId: job.id 
+    })
   })
 
   worker.on("failed", (job, error) => {
     Sentry.captureException(error, {
-      extra: { jobId: job?.id, sessionId: job?.data?.sessionId },
+      extra: { 
+        jobId: job?.id, 
+        sessionId: job?.data?.sessionId 
+      },
     })
-    logger.error("Job failed", { jobId: job?.id, error })
+    logger.error("Job failed", { 
+      service: "AscendAI",
+      jobId: job?.id, 
+      error 
+    })
   })
+}
+
+const createSessionFeedback = async (
+  conversation: { content: string; role: string }[],
+  scenarioType: string
+) => {
+  try {
+    const conversationText = conversation
+      .map((msg) => `${msg.role}: ${msg.content}`)
+      .join("\n")
+      
+    const feedback = buildFeedbackPrompt(conversationText, scenarioType as ScenarioType)
+    
+    return feedback
+  } catch (error) {
+    logger.error("Failed to create session feedback", { 
+      service: "AscendAI",
+      error 
+    })
+    throw error
+  }
 }

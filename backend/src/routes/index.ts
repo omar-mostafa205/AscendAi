@@ -1,7 +1,7 @@
 import { Router } from "express"
 import jobRouter from "./job/job.routes"
 import sessionRouter from "./sessions/session.routes"
-import sessionByIdRouter from "./session/session.routes"
+import sessionByIdRouter from "./sessions/sessionById.routes"
 
 const router = Router()
 

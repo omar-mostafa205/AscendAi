@@ -25,14 +25,24 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     const connect = async (accessToken: string) => {
       if (cancelled) return
+      // Important: do NOT disconnect/recreate the socket on token refresh or tab switches.
+      // Recreating the socket causes "transport close" and forces the session to re-join.
       if (current) {
-        current.disconnect()
-        current = null
+        // Update auth for future reconnect handshakes.
+        ;(current as any).auth = { token: accessToken }
+        if (!current.connected) {
+          try {
+            current.connect()
+          } catch {
+            // ignore
+          }
+        }
+        return
       }
 
       current = io(socketUrl, {
         transports: ["websocket", "polling"],
-        reconnectionAttempts: 3,
+        reconnectionAttempts: 10,
         auth: { token: accessToken },
       })
 

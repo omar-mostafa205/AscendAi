@@ -1,105 +1,11 @@
-// session.service.ts
 import { prisma } from "../../config/database"
-import { model } from "../../config/gemeni"
 import logger from "../../config/logger"
-import createInterviewGraph from "../../services/ai/graphs/interview-graph"
-import { buildPersonaCreationPrompt } from "../../services/ai/prompts/persona.prompt"
-import { LivekitService } from "../../services/voice/livekit.service"
-import { Job, Persona } from "@prisma/client"
-import { geminiGenerateContentWithRetry } from "../../services/ai/gemini-retry"
-
-type ScenarioType = "technical" | "background" | "culture"
-
-interface GeneratedPersona {
-  name: string
-  role: string
-  company: string
-  background: string
-  interviewStyle: string
-  openessLevel: string
-  conscientiousnessLevel: string
-  extraversionLevel: string
-  agreeablenessLevel: string
-  neuroticismLevel: string
-}
-
-// Private helper functions (not exported)
-// ============================================================================
-
-async function generatePersona(
-  job: Job,
-  scenarioType: ScenarioType
-): Promise<Persona> {
-  const prompt = buildPersonaCreationPrompt(job, scenarioType)
-  const fallbackPersona: GeneratedPersona = {
-    name: "Alex Morgan",
-    role: scenarioType === "technical" ? "Engineering Manager" : "Hiring Manager",
-    company: job.company,
-    background:
-      "Experienced interviewer focused on evaluating role-relevant skills and communication clarity.",
-    interviewStyle: "Friendly, structured, and probing with follow-up questions when needed.",
-    openessLevel: "medium",
-    conscientiousnessLevel: "high",
-    extraversionLevel: "medium",
-    agreeablenessLevel: "high",
-    neuroticismLevel: "low",
-  }
-
-  const text = (
-    await geminiGenerateContentWithRetry(() => model.generateContent(prompt), {
-      fallbackText: JSON.stringify(fallbackPersona),
-    })
-  ).trim()
-  const clean = text.replace(/```json|```/g, "").trim()
-
-  let generated: GeneratedPersona = fallbackPersona
-  try {
-    generated = JSON.parse(clean) as GeneratedPersona
-  } catch {
-    generated = fallbackPersona
-  }
-
-  logger.info("Persona generated", { jobId: job.id, scenarioType })
-
-  return prisma.persona.create({
-    data: {
-      jobId: job.id,
-      type: scenarioType,
-      name: generated.name,
-      role: generated.role,
-      company: generated.company,
-      background: generated.background,
-      interviewStyle: generated.interviewStyle,
-      openessLevel: generated.openessLevel,
-      conscientiousnessLevel: generated.conscientiousnessLevel,
-      extraversionLevel: generated.extraversionLevel,
-      agreeablenessLevel: generated.agreeablenessLevel,
-      neuroticismLevel: generated.neuroticismLevel,
-    },
-  })
-}
-
-async function getPersona(
-  job: Job,
-  scenarioType: ScenarioType
-): Promise<Persona> {
-  const existing = await prisma.persona.findUnique({
-    where: {
-      jobId_type: { jobId: job.id, type: scenarioType },
-    },
-  })
-
-  if (existing) {
-    logger.info("Reusing existing persona", {
-      personaId: existing.id,
-      jobId: job.id,
-      scenarioType,
-    })
-    return existing
-  }
-
-  return generatePersona(job, scenarioType)
-}
+import { GoogleGenAI, Modality } from "@google/genai"
+import { env } from "../../config/env"
+import { personaService } from "./persona.service"
+import { buildLiveInterviewPrompt } from "../../services/ai/prompts/live.prompt"
+import { analysisQueue } from "../../queues/session-analysis-queue"
+type ScenarioType = "technical" | "background" | "culture"  
 
 async function createSession(
   userId: string,
@@ -112,7 +18,7 @@ async function createSession(
 
   if (!job) throw new Error(`Job not found: ${jobId}`)
 
-  const persona = await getPersona(job, scenarioType)
+  const persona = await personaService.getOrCreatePersona(job, scenarioType)
 
   const session = await prisma.interviewSession.create({
     data: {
@@ -123,44 +29,8 @@ async function createSession(
       status: "in_progress",
     },
   })
-
-  try {
-    await LivekitService.createRoom(session.id)
-  } catch (e) {
-    logger.warn("Livekit room creation failed; continuing without hard-failing session creation", {
-      sessionId: session.id,
-      error: e,
-    })
-  }
-  const livekitToken = await LivekitService.generateToken(session.id, userId)
-
-  // Best-effort: initialize the LangGraph checkpoint state without running the full graph.
-  try {
-    const graph = await createInterviewGraph()
-    await (graph as any).updateState(
-      { configurable: { thread_id: session.id } },
-      {
-        messages: [],
-        questionCount: 0,
-        maxQuestions: 8,
-        isComplete: false,
-        scenarioType,
-        feedback: null,
-        overallScore: null,
-        jobContext: `Job Title: ${job.title}\nCompany: ${job.company}\nDescription: ${job.jobDescription}`,
-        personaContext: `You are ${persona.name}, ${persona.role} at ${persona.company}.\nInterview style: ${persona.interviewStyle}\nBackground: ${persona.background}`,
-      }
-    )
-  } catch (e) {
-    logger.warn("LangGraph state init failed; will initialize on first socket turn", {
-      sessionId: session.id,
-      error: e,
-    })
-  }
-
-  logger.info("Session created", { sessionId: session.id, userId, jobId })
-
-  return { session, livekitToken }
+  
+  return { session }
 }
 
 async function listSessions(jobId: string) {
@@ -188,11 +58,151 @@ async function getSessions(jobId: string, userId: string) {
     where: { id: jobId, userId },
     select: { id: true },
   })
+
   if (!job) throw new Error(`Job not found: ${jobId}`)
+
   return listSessions(jobId)
+}
+
+async function getSession(sessionId: string, userId: string) {
+  const session = await prisma.interviewSession.findFirst({
+    where: { id: sessionId, userId },
+    select: {
+      id: true,
+      scenarioType: true,
+      status: true,
+      startedAt: true,
+      endedAt: true,
+      job: {
+        select: {
+          title: true,
+          company: true,
+        },
+      },
+    },
+  })
+
+  if (!session) throw new Error(`Session not found: ${sessionId}`)
+  return session
+}
+
+async function endSession(sessionId: string, userId: string) {
+  const session = await prisma.interviewSession.findFirst({
+    where: { id: sessionId, userId },
+    select: { id: true, status: true },
+  })
+
+  if (!session) throw new Error(`Session not found: ${sessionId}`)
+
+  if (session.status === "completed" || session.status === "processing") {
+    return { id: sessionId, status: session.status }
+  }
+
+  await prisma.interviewSession.updateMany({
+    where: { id: sessionId, userId },
+    data: {
+      status: "processing",
+      endedAt: new Date(),
+    },
+  })
+
+  try {
+    await analysisQueue.add("analyze_session", { sessionId })
+  } catch (queueError) {
+    logger.error("Failed to enqueue analysis job (API end)", { sessionId, userId, error: queueError })
+  }
+
+  return { id: sessionId, status: "processing" }
+}
+
+async function getLiveToken(
+  sessionId: string,
+  userId: string,
+  scenarioType?: ScenarioType
+) {
+  const session = await prisma.interviewSession.findFirst({
+    where: { id: sessionId, userId },
+    select: {
+      id: true,
+      scenarioType: true,
+      personaId: true,
+      jobId: true,
+      job: true,
+      persona: true,
+    },
+  })
+
+  if (!session) throw new Error(`Session not found: ${sessionId}`)
+
+  const resolvedScenarioType = (scenarioType ?? (session.scenarioType as ScenarioType)) as
+    | "technical"
+    | "background"
+    | "culture"
+
+  if (!["technical", "background", "culture"].includes(resolvedScenarioType)) {
+    throw new Error("Invalid scenarioType")
+  }
+
+  const job = session.job
+  if (!job) throw new Error("Session job not found")
+
+  const persona =
+    session.persona ?? (await personaService.getOrCreatePersona(job, resolvedScenarioType))
+
+  if (!session.personaId && persona?.id) {
+    try {
+      await prisma.interviewSession.updateMany({
+        where: { id: sessionId, userId },
+        data: { personaId: persona.id },
+      })
+    } catch (e) {
+      logger.warn("Failed to backfill personaId on session", { sessionId, userId, error: e })
+    }
+  }
+
+  const expireTime = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+
+  const client = new GoogleGenAI({
+    apiKey: env.GEMINI_API_KEY,
+    httpOptions: { apiVersion: "v1alpha" },
+  })
+
+  const systemPrompt = buildLiveInterviewPrompt(job, persona, resolvedScenarioType)
+
+  const token = await client.authTokens.create({
+    config: {
+      uses: 1,
+      expireTime,
+      liveConnectConstraints: {
+        model: env.GEMINI_LIVE_MODEL,
+        config: {
+          systemInstruction: systemPrompt,
+          responseModalities: [Modality.AUDIO],
+          sessionResumption: {},
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: "Aoede" },
+            },
+          },
+        },
+      },
+      httpOptions: { apiVersion: "v1alpha" },
+    },
+  })
+
+  if (!token?.name) {
+    throw new Error("Failed to create live token")
+  }
+
+  return { token: token.name, model: env.GEMINI_LIVE_MODEL }
 }
 
 export const sessionService = {
   createSession,
   getSessions,
+  getSession,
+  endSession,
+  getLiveToken,
 } as const

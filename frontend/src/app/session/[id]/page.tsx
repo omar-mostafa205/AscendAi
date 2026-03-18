@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Mic, MicOff, Phone, Settings, Volume2, MessageSquare, Wifi, WifiOff } from "lucide-react";
+import { Mic, MicOff, Phone, Settings, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { useSocket } from "@/features/session/hooks/useSocket";
-import { useLiveKit } from "@/features/session/hooks/useLivekit";
 import { SessionService } from "@/features/session/services/session.service";
+import { useGeminiLive } from "@/features/session/hooks/useGeminiLive";
 
 type ScenarioType = "technical" | "background" | "culture";
 
@@ -18,12 +18,7 @@ interface InterviewSession {
   jobTitle: string;
   company: string;
   startedAt: string;
-  livekitToken?: string | null;
-  currentQuestion?: {
-    number: number;
-    text: string;
-    duration: number;
-  };
+  status?: string;
 }
 
 const scenarioConfig: Record<ScenarioType, { label: string; image: string }> = {
@@ -48,7 +43,6 @@ export default function InterviewSessionPage() {
   const params = useParams();
   const sessionId = params?.id as string;
 
-  // ── Session fetch ──────────────────────────────────────────────────────
   const [session, setSession] = useState<InterviewSession | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -62,56 +56,96 @@ export default function InterviewSessionPage() {
 
         if (cancelled) return;
 
+        const status = data.status as string | undefined
+        if (data.endedAt || status === "processing" || status === "completed") {
+          router.push(`/feedback/${sessionId}`)
+          return
+        }
+
         setSession({
           id: data.id,
           scenarioType: data.scenarioType,
           jobTitle: data.job?.title ?? "Interview Session",
           company: data.job?.company ?? "",
           startedAt: data.startedAt,
-          livekitToken: data.livekitToken ?? null,
+          status: status ?? "active",
         });
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [sessionId]);
+  }, [sessionId, router]);
 
-  // ── Hooks ──────────────────────────────────────────────────────────────
-  const { sessionJoined, isThinking, aiText, isEnded, endSession, playLastAudio } = useSocket(sessionId);
-  const { isConnected, isTalking, error: livekitError, startTalking, stopTalking, disconnect } = useLiveKit(
-    session?.livekitToken ?? null,
-    !!session?.livekitToken
-  );
+  const { sessionJoined, isEnded, endSession } = useSocket(sessionId);
+  const {
+    isConnected,
+    isMuted,
+    isMicActive,
+    isUserSpeaking,
+    isModelSpeaking,
+    hasAudio,
+    error,
+    connect,
+    startInterview,
+    disconnect,
+    startMic,
+    stopMic,
+    toggleMute,
+  } = useGeminiLive(sessionId, session?.scenarioType)
 
-  // ── UI state ──────────────────────────────────────────────────────────
-  const [showQuestion, setShowQuestion] = useState(false);
   const elapsedTime = useElapsedTime();
 
-  // ── Auto-redirect when session ends via socket ─────────────────────────
+  useEffect(() => {
+    if (!sessionId || !session?.scenarioType) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        if (cancelled) return
+        await connect()
+      } catch (err) {
+        console.error("Failed to connect to Gemini Live", err)
+      }
+    })()
+    return () => {
+      cancelled = true
+      disconnect()
+    }
+  }, [sessionId, session?.scenarioType, connect, disconnect])
+
   useEffect(() => {
     if (isEnded) {
+      stopMic();
       disconnect();
       router.push(`/feedback/${sessionId}`);
     }
-  }, [isEnded, disconnect, router, sessionId]);
+  }, [isEnded, stopMic, disconnect, router, sessionId]);
 
-  // ── End interview (manual) ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!sessionJoined) return;
+    if (!isConnected) return;
+    if (isMicActive) return;
+    startMic().catch((e) => console.error("Failed to auto-start mic", e));
+  }, [sessionJoined, isConnected, isMicActive, startMic]);
+
+  useEffect(() => {
+    if (!sessionJoined) return
+    if (!isConnected) return
+    startInterview().catch((e) => console.error("Failed to start interview", e))
+    // fire once per join/connect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionJoined, isConnected])
+
   const handleEndInterview = async () => {
     try {
-      if (isTalking) {
-        await stopTalking()
-        await new Promise((r) => setTimeout(r, 500))
-      }
+      await stopMic()
     } catch (e) {
       console.error("Failed to stop recording before ending interview", e)
     }
 
-    // Prefer REST end-session so the button works even if the socket is disconnected.
     try {
       await SessionService.endSession(sessionId)
     } catch (e) {
-      // Fall back to socket emit if REST fails for any reason.
       console.error("Failed to end session via API, falling back to socket", e)
       endSession()
     } finally {
@@ -120,7 +154,6 @@ export default function InterviewSessionPage() {
     }
   };
 
-  // ── Loading ────────────────────────────────────────────────────────────
   if (loading || !session) {
     return (
       <div className="min-h-screen bg-[#f5f2ef] flex items-center justify-center">
@@ -136,8 +169,6 @@ export default function InterviewSessionPage() {
 
   return (
     <div className="h-screen bg-[#f5f2ef] flex flex-col overflow-hidden">
-
-      {/* Header */}
       <div className="px-8 pt-6 pb-4 flex items-start justify-between z-10">
         <div>
           <h1 className="text-3xl font-serif text-[#1f1f1f] mb-1">{session.jobTitle}</h1>
@@ -147,16 +178,15 @@ export default function InterviewSessionPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* LiveKit connection badge */}
-          <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${isConnected
+          <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${
+            isConnected
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
               : "border-[#e5e1dc] bg-white text-[#676662]"
-            }`}>
+          }`}>
             {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
             {isConnected ? "Live" : "Connecting…"}
           </div>
 
-          {/* Socket joined badge */}
           {sessionJoined && (
             <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
@@ -164,42 +194,38 @@ export default function InterviewSessionPage() {
             </div>
           )}
 
-          {/* Timer */}
+          {isConnected && sessionJoined && !hasAudio && (
+            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700">
+              Audio fallback
+            </div>
+          )}
+
           <div className="px-4 py-2">
             <p className="text-3xl font-bold text-[#1b1917] tabular-nums">{elapsedTime}</p>
           </div>
         </div>
       </div>
 
-      {/* Main area */}
       <div className="flex-1 relative">
-
-        {/* Avatar card */}
         <div className="absolute inset-0 px-8 pb-8">
           <Card className="w-full h-full bg-white border-[#e5e1dc] overflow-hidden rounded-3xl">
             <div className="w-full h-full flex items-end justify-center relative">
+              
+              {isModelSpeaking && (
+                <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10">
+                  <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm px-4 py-2 rounded-full flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    AI is speaking...
+                  </div>
+                </div>
+              )}
 
-              {/* AI thinking / speaking indicator */}
-              {(isThinking || aiText) && (
-                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10">
-                  {isThinking ? (
-                    <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm border border-[#e5e1dc] rounded-full px-4 py-2 shadow-sm">
-                      <span className="flex gap-1">
-                        {[0, 150, 300].map((d) => (
-                          <span
-                            key={d}
-                            className="w-1.5 h-1.5 rounded-full bg-[#1b1917] animate-bounce"
-                            style={{ animationDelay: `${d}ms` }}
-                          />
-                        ))}
-                      </span>
-                      <span className="text-xs text-[#676662]">Thinking…</span>
-                    </div>
-                  ) : aiText ? (
-                    <div className="max-w-md bg-white/95 backdrop-blur-sm border border-[#e5e1dc] rounded-2xl px-5 py-3 shadow-sm">
-                      <p className="text-sm text-[#1f1f1f] leading-relaxed">{aiText}</p>
-                    </div>
-                  ) : null}
+              {isUserSpeaking && (
+                <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10">
+                  <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-2 rounded-full flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    Listening...
+                  </div>
                 </div>
               )}
 
@@ -218,90 +244,48 @@ export default function InterviewSessionPage() {
           </Card>
         </div>
 
-        {/* Question overlay */}
-        {showQuestion && session.currentQuestion && (
-          <div className="absolute bottom-32 left-1/2 -translate-x-1/2 max-w-3xl w-full px-8 z-10">
-            <Card className="bg-white/95 backdrop-blur-sm border-[#e5e1dc] shadow-2xl">
-              <div className="p-6">
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <h3 className="text-lg font-semibold text-[#1f1f1f]">
-                    Question {session.currentQuestion.number}
-                  </h3>
-                  <span className="text-sm text-[#676662] font-medium">
-                    {Math.floor(session.currentQuestion.duration / 60)}:00
-                  </span>
-                </div>
-                <p className="text-[#1f1f1f] leading-relaxed">{session.currentQuestion.text}</p>
-              </div>
-            </Card>
-          </div>
-        )}
-
-        {/* LiveKit error */}
-        {livekitError && (
+        {error && (
           <div className="absolute top-4 right-12 z-20">
             <div className="bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-xl">
-              Audio error: {livekitError}
+              Audio error: {error}
             </div>
           </div>
         )}
       </div>
 
-      {/* Bottom controls */}
       <div className="p-8 flex items-center justify-center z-20">
         <div className="flex items-center gap-4">
-
-          {/* Microphone — normal conversation mode */}
           <Button
-            onPointerDown={(e) => {
-              e.preventDefault()
-              startTalking()
-            }}
-            onPointerUp={(e) => {
-              e.preventDefault()
-              stopTalking()
-            }}
-            onPointerLeave={(e) => {
-              e.preventDefault()
-              stopTalking()
-            }}
+            onClick={isMicActive ? stopMic : startMic}
             size="lg"
             className={`w-14 h-14 rounded-full p-0 ${
-              isTalking
-                ? "bg-[#1b1917] hover:bg-neutral-800 text-white"
-                : "bg-white border-2 border-[#e5e1dc] hover:bg-[#f0ebe6]"
+              isMicActive
+                ? "bg-green-600 hover:bg-green-700 text-white"
+                : "bg-white border-2 border-[#e5e1dc] hover:bg-[#f0ebe6] text-[#1b1917]"
             }`}
-            title={isTalking ? "Release To Send" : "Hold To Talk"}
+            title={isMicActive ? "Disable Mic" : "Enable Mic"}
           >
-            {isTalking ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5 text-[#1b1917]" />}
+            {isMicActive ? (
+              <Mic className="w-5 h-5" />
+            ) : (
+              <MicOff className="w-5 h-5" />
+            )}
           </Button>
 
-          {/* Volume (UI only) */}
           <Button
-            onClick={playLastAudio}
+            onClick={toggleMute}
             size="lg"
             variant="outline"
             className="w-14 h-14 rounded-full p-0 bg-white border-2 border-[#e5e1dc] hover:bg-[#f0ebe6]"
-            title="Play Last AI Audio"
+            title={isMuted ? "Unmute AI" : "Mute AI"}
           >
-            <Volume2 className="w-5 h-5 text-[#1b1917]" />
+            {isMuted ? (
+              <VolumeX className="w-5 h-5 text-[#1b1917]" />
+            ) : (
+              <Volume2 className="w-5 h-5 text-[#1b1917]" />
+            )}
           </Button>
 
-          {/* Question toggle */}
-          <Button
-            onClick={() => setShowQuestion((v) => !v)}
-            size="lg"
-            variant="outline"
-            className={`w-14 h-14 rounded-full p-0 border-2 hover:bg-[#f0ebe6] ${showQuestion
-                ? "bg-[#1b1917] border-[#1b1917] text-white hover:bg-neutral-800"
-                : "bg-white border-[#e5e1dc]"
-              }`}
-            title="View Question"
-          >
-            <MessageSquare className={`w-5 h-5 ${showQuestion ? "text-white" : "text-[#1b1917]"}`} />
-          </Button>
-
-          {/* Settings (UI only) */}
           <Button
             size="lg"
             variant="outline"
@@ -311,7 +295,6 @@ export default function InterviewSessionPage() {
             <Settings className="w-5 h-5 text-[#1b1917]" />
           </Button>
 
-          {/* End call — wired to endSession + disconnect */}
           <Button
             onClick={handleEndInterview}
             size="lg"

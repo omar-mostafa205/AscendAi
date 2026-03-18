@@ -27,15 +27,10 @@ export const envSchema = z.object({
 
   DATABASE_URL: z.string(),
 
+  GEMINI_LIVE_MODEL: z.string().optional().default("gemini-2.0-flash-live-001"), 
   GEMINI_API_KEY: z.string(),
   GEMINI_MODEL: z.string().optional().default("gemini-2.5-flash"),
   GEMINI_API_VERSION: z.string().optional().default("v1beta"),
-
-  DEEPGRAM_API_KEY: z.string(),
-
-  LIVEKIT_URL: z.string(),
-  LIVEKIT_API_KEY: z.string(),
-  LIVEKIT_API_SECRET: z.string(),
   REDIS_URL: z.string(),
 })
 const validateEnv = () => {

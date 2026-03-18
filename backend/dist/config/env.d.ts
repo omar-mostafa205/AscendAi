@@ -11,13 +11,10 @@ export declare const envSchema: z.ZodObject<{
     SUPABASE_URL: z.ZodString;
     SUPABASE_SERVICE_ROLE_KEY: z.ZodString;
     DATABASE_URL: z.ZodString;
+    GEMINI_LIVE_MODEL: z.ZodDefault<z.ZodOptional<z.ZodString>>;
     GEMINI_API_KEY: z.ZodString;
     GEMINI_MODEL: z.ZodDefault<z.ZodOptional<z.ZodString>>;
     GEMINI_API_VERSION: z.ZodDefault<z.ZodOptional<z.ZodString>>;
-    DEEPGRAM_API_KEY: z.ZodString;
-    LIVEKIT_URL: z.ZodString;
-    LIVEKIT_API_KEY: z.ZodString;
-    LIVEKIT_API_SECRET: z.ZodString;
     REDIS_URL: z.ZodString;
 }, z.core.$strip>;
 export declare const env: {
@@ -27,13 +24,10 @@ export declare const env: {
     SUPABASE_URL: string;
     SUPABASE_SERVICE_ROLE_KEY: string;
     DATABASE_URL: string;
+    GEMINI_LIVE_MODEL: string;
     GEMINI_API_KEY: string;
     GEMINI_MODEL: string;
     GEMINI_API_VERSION: string;
-    DEEPGRAM_API_KEY: string;
-    LIVEKIT_URL: string;
-    LIVEKIT_API_KEY: string;
-    LIVEKIT_API_SECRET: string;
     REDIS_URL: string;
     SENTRY_DSN?: string | undefined;
 };
