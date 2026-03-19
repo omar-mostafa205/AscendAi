@@ -12,8 +12,16 @@ type SaveMessagePayload = {
   content: string
 }
 
+type SessionMessage = {
+  role: "user" | "assistant"
+  content: string
+  createdAt: string
+}
+
 const activeSocketIdBySessionUserKey = new Map<string, string>()
 const disconnectTimersBySessionId = new Map<string, NodeJS.Timeout>()
+const pendingMessagesBySessionId = new Map<string, SessionMessage[]>()
+const flushTimersBySessionId = new Map<string, NodeJS.Timeout>()
 
 function clearDisconnectTimer(sessionId: string) {
   const timer = disconnectTimersBySessionId.get(sessionId)
@@ -26,6 +34,84 @@ function clearDisconnectTimer(sessionId: string) {
 export const registerSessionHandlers = (io: Server, socket: Socket) => {
   const userId = socket.data.userId as string
   const joinedSessionIds = new Set<string>()
+
+  const flushPendingMessages = async (sessionId: string) => {
+    const pending = pendingMessagesBySessionId.get(sessionId)
+    if (!pending || pending.length === 0) return
+  
+    pendingMessagesBySessionId.delete(sessionId)
+  
+    const t = flushTimersBySessionId.get(sessionId)
+    if (t) {
+      clearTimeout(t)
+      flushTimersBySessionId.delete(sessionId)
+    }
+  
+    try {
+      const session = await prisma.interviewSession.findFirst({
+        where: { id: sessionId, userId },
+        select: { id: true, status: true, messages: true },
+      })
+  
+      if (!session) {
+        logger.warn("flushPendingMessages: session not found", { sessionId, userId })
+        return
+      }
+  
+      // ✅ FIX: Handle null messages properly
+      const existing: SessionMessage[] = session.messages 
+        ? (Array.isArray(session.messages) ? session.messages : [])
+        : []
+  
+      // Build deduplicated merged list
+      const merged: SessionMessage[] = [...existing]
+  
+      for (const m of pending) {
+        // Skip if this exact message already exists
+        const isDuplicate = merged.some(
+          (msg) => msg.role === m.role && msg.content === m.content
+        )
+        if (!isDuplicate) {
+          merged.push(m)
+        }
+      }
+  
+      // ✅ FIX: Proper JSON update
+      await prisma.interviewSession.update({
+        where: { id: sessionId },
+        data: { 
+          messages: merged 
+        },
+      })
+  
+      logger.debug("Messages flushed to session.messages", { 
+        sessionId, 
+        userId, 
+        totalMessages: merged.length,
+        added: merged.length - existing.length 
+      })
+    } catch (error) {
+      Sentry.captureException(error)
+      logger.error("flushPendingMessages error", { sessionId, userId, error })
+      throw error
+    }
+  }
+  const enqueueMessage = (sessionId: string, message: SessionMessage) => {
+    const pending = pendingMessagesBySessionId.get(sessionId) ?? []
+    pending.push(message)
+    pendingMessagesBySessionId.set(sessionId, pending)
+
+    if (flushTimersBySessionId.has(sessionId)) return
+
+    const timer = setTimeout(() => {
+      flushPendingMessages(sessionId).catch((error) => {
+        Sentry.captureException(error)
+        logger.error("flushPendingMessages error", { sessionId, userId, error })
+      })
+    }, 800)
+
+    flushTimersBySessionId.set(sessionId, timer)
+  }
 
   socket.on("join_session", async (payload: JoinPayload) => {
     const sessionId = typeof payload === "string" ? payload : payload?.sessionId
@@ -93,6 +179,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
     const { sessionId, role, content } = payload || {}
     
     if (!sessionId || !role || !content?.trim()) {
+      logger.debug("save_message: ignored empty payload", { sessionId, userId, role })
       return
     }
 
@@ -103,51 +190,11 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
       return
     }
 
-    try {
-      const session = await prisma.interviewSession.findFirst({
-        where: { id: sessionId, userId },
-        select: { id: true, status: true },
-      })
-
-      if (!session) {
-        logger.warn("save_message: session not found", { sessionId, userId })
-        return
-      }
-
-      if (session.status !== "active" && session.status !== "in_progress") {
-        logger.warn("save_message: session not active", { sessionId, userId, status: session.status })
-        return
-      }
-
-      const existingMessage = await prisma.interviewMessage.findFirst({
-        where: {
-          sessionId,
-          role,
-          content: trimmedContent,
-          createdAt: {
-            gte: new Date(Date.now() - 5000)
-          }
-        },
-      })
-
-      if (existingMessage) {
-        logger.debug("Duplicate message ignored", { sessionId, role })
-        return
-      }
-
-      await prisma.interviewMessage.create({
-        data: { 
-          sessionId, 
-          role, 
-          content: trimmedContent 
-        },
-      })
-      
-      logger.debug("Message saved", { sessionId, role, length: trimmedContent.length })
-    } catch (error) {
-      Sentry.captureException(error)
-      logger.error("save_message error", { sessionId, userId, role, error })
-    }
+    enqueueMessage(sessionId, {
+      role,
+      content: trimmedContent,
+      createdAt: new Date().toISOString(),
+    })
   })
 
   socket.on("end_session", async ({ sessionId }: { sessionId: string }) => {
@@ -172,6 +219,9 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         return
       }
 
+      // Ensure the full conversation is persisted before ending the session.
+      await flushPendingMessages(sessionId)
+
       await prisma.interviewSession.updateMany({
         where: { id: sessionId, userId },
         data: { 
@@ -179,6 +229,9 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
           endedAt: new Date() 
         },
       })
+
+      // Flush again in case some messages arrived while we were ending.
+      await flushPendingMessages(sessionId)
 
       try {
         await analysisQueue.add("analyze_session", { sessionId })
@@ -249,7 +302,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
 
           const session = await prisma.interviewSession.findFirst({
             where: { id: sessionId, userId },
-            select: { id: true, status: true },
+            select: { id: true, status: true, messages: true },
           })
 
           if (!session) return
@@ -259,9 +312,14 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
             return
           }
 
-          const userMsgCount = await prisma.interviewMessage.count({
-            where: { sessionId, role: "user" },
+          await flushPendingMessages(sessionId)
+
+          const refreshed = await prisma.interviewSession.findFirst({
+            where: { id: sessionId, userId },
+            select: { messages: true },
           })
+          const messages = Array.isArray(refreshed?.messages) ? (refreshed?.messages as any[]) : []
+          const userMsgCount = messages.filter((m) => m?.role === "user" && String(m?.content ?? "").trim().length > 0).length
 
           if (userMsgCount === 0) {
             logger.debug("No user messages, skipping auto-end", { sessionId })

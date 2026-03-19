@@ -7,7 +7,7 @@ const sessionByIdRouter = Router()
 sessionByIdRouter.use(authMiddleware)
 sessionByIdRouter.get("/:id", getSession)
 sessionByIdRouter.post("/:id/end", endSession)
-sessionByIdRouter.post("/:id/live-token", getLiveToken)
+sessionByIdRouter.get("/:id/live-token", getLiveToken)
 
 export default sessionByIdRouter
 

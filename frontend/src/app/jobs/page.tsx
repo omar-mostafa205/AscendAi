@@ -8,8 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AddJobModal } from "@/features/jobs/components/JobModal";
 import { JobService } from "@/features/jobs/services/job.service";
 import { Job } from "@/features/jobs/types";
+import { SessionService } from "@/features/session/services/session.service";
 import { formatRelativeTime } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 interface DashboardStats {
   totalSessions: number;
@@ -62,6 +63,19 @@ export default function JobsPage() {
   });
 
   const jobs = data?.data ?? [];
+  const sessionsQueries = useQueries({
+    queries: jobs.map((job) => ({
+      queryKey: ["sessions", job.id],
+      queryFn: () => SessionService.getSessions(job.id),
+      enabled: !!job.id,
+      select: (res: any) => res.data,
+    })),
+  });
+
+  const jobsWithSessions: Job[] = jobs.map((job, idx) => {
+    const sessions = (sessionsQueries[idx]?.data ?? []) as Job["sessions"];
+    return { ...job, sessions: Array.isArray(sessions) ? sessions : [] };
+  });
 
   if (isLoading) {
     return (
@@ -114,7 +128,7 @@ export default function JobsPage() {
     );
   }
 
-  const stats = computeStats(jobs);
+  const stats = computeStats(jobsWithSessions);
 
   return (
     <div className="min-h-screen bg-[#f5f2ef]">
@@ -200,7 +214,7 @@ export default function JobsPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {jobs.map((job) => {
+            {jobsWithSessions.map((job) => {
               const sessionCount = job.sessions?.length ?? 0;
               const avgScore =
                 sessionCount > 0

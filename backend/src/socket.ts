@@ -24,7 +24,7 @@ export const initializeSocket = (httpServer: HttpServer): Server => {
       userId: socket.data.userId,
     })
 
-    registerSessionHandlers(io, socket)
+  registerSessionHandlers(io, socket)
 
     socket.on("disconnect", (reason) => {
       logger.info("Client disconnected", {

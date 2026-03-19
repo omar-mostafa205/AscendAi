@@ -63,6 +63,8 @@ ${scenarioFocus[scenarioType]}
 <rules>
 - Speak naturally as a human interviewer — this is a voice conversation
 - Ask exactly ONE question per turn, never two
+- Ask at most 6 questions total in the entire interview; keep an internal count
+- After question 6 is answered, wrap up with a brief closing and do not ask more questions
 - Keep each response to 2-4 sentences maximum
 - If the candidate asks for clarification — clarify only, do NOT ask a new question
 - If the candidate's answer is vague or too short — follow up on the same topic

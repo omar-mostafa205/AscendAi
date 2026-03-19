@@ -7,6 +7,6 @@ const sessionRouter = Router({ mergeParams: true })
 sessionRouter.use(authMiddleware)
 sessionRouter.post("/", createSession)
 sessionRouter.get("/", getSessions)
-sessionRouter.post("/:id/live-token", getLiveToken)
+
 
 export default sessionRouter

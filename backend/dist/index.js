@@ -56,20 +56,10 @@ async function bootstrap() {
     try {
         (0, sentry_1.initSentry)();
         await (0, database_1.connectDb)();
-        const skipRedis = process.env.SKIP_REDIS === "1" ||
-            process.env.SKIP_REDIS === "true" ||
-            process.env.SKIP_REDIS === "yes";
-        if (!skipRedis) {
-            await redis_1.redisQueue.ping();
-            logger_1.default.info("Redis connected");
-        }
-        else {
-            logger_1.default.warn("SKIP_REDIS enabled: skipping Redis + session worker startup");
-        }
+        await redis_1.redisQueue.ping();
+        logger_1.default.info("Redis connected");
         const { app, server, io } = (0, server_1.createServer)();
-        if (!skipRedis) {
-            await (0, session_analysis_worker_1.startSessionWorker)();
-        }
+        await (0, session_analysis_worker_1.startSessionWorker)();
         const PORT = env_1.env.PORT || 8001;
         server.listen(PORT, () => {
             logger_1.default.info("Server started", {
@@ -81,9 +71,7 @@ async function bootstrap() {
             logger_1.default.info(`${signal} received, shutting down gracefully...`);
             server.close(() => logger_1.default.info("HTTP server closed"));
             io.close(() => logger_1.default.info("WebSocket server closed"));
-            if (!skipRedis) {
-                await redis_1.redisQueue.quit();
-            }
+            await redis_1.redisQueue.quit();
             await Sentry.close(2000);
             await (0, database_1.disconnectDb)();
             process.exit(0);

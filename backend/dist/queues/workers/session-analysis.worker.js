@@ -43,34 +43,47 @@ const logger_1 = __importDefault(require("../../config/logger"));
 const Sentry = __importStar(require("@sentry/node"));
 const feedback_prompt_1 = require("../../services/ai/prompts/feedback.prompt");
 const redis_1 = require("../../config/redis");
+const genai_1 = require("@google/genai");
+const env_1 = require("../../config/env");
 const startSessionWorker = async () => {
     const worker = new bullmq_1.Worker("session-analysis", async (job) => {
         const { sessionId } = job.data;
         const session = await database_1.prisma.interviewSession.findUnique({
             where: { id: sessionId },
             select: {
-                messages: {
-                    orderBy: { createdAt: "asc" },
-                    select: {
-                        content: true,
-                        role: true,
-                    },
-                },
+                messages: true,
                 scenarioType: true,
             },
         });
         if (!session) {
             throw new Error(`Session ${sessionId} not found`);
         }
-        if (!session.messages || session.messages.length === 0) {
+        const messages = Array.isArray(session.messages) ? session.messages : [];
+        if (messages.length === 0) {
             logger_1.default.warn("No messages found for session", { sessionId });
+            // Prevent sessions from getting stuck in "processing" forever.
+            await database_1.prisma.interviewSession.update({
+                where: { id: sessionId },
+                data: {
+                    status: "completed",
+                    overallScore: 0,
+                    feedback: {
+                        overallScore: 0,
+                        strengths: [],
+                        weaknesses: [],
+                        recommendations: [],
+                        summary: "No interview messages were recorded for this session.",
+                    },
+                },
+            });
             return null;
         }
-        const feedback = await createSessionFeedback(session.messages, session.scenarioType);
+        const feedbackData = await createSessionFeedback(messages.map((m) => ({ content: String(m?.content ?? ""), role: String(m?.role ?? "") })), session.scenarioType);
         await database_1.prisma.interviewSession.update({
             where: { id: sessionId },
             data: {
-                feedback,
+                feedback: feedbackData,
+                overallScore: feedbackData.overallScore || 0,
                 status: "completed"
             },
         });
@@ -78,7 +91,7 @@ const startSessionWorker = async () => {
             sessionId,
             jobId: job.id
         });
-        return feedback;
+        return feedbackData;
     }, {
         // Use the same Redis connection config as the Queue (supports Upstash/rediss).
         connection: redis_1.redisQueue.options,
@@ -109,8 +122,21 @@ const createSessionFeedback = async (conversation, scenarioType) => {
         const conversationText = conversation
             .map((msg) => `${msg.role}: ${msg.content}`)
             .join("\n");
-        const feedback = (0, feedback_prompt_1.buildFeedbackPrompt)(conversationText, scenarioType);
-        return feedback;
+        const prompt = (0, feedback_prompt_1.buildFeedbackPrompt)(conversationText, scenarioType);
+        const client = new genai_1.GoogleGenAI({ apiKey: env_1.env.GEMINI_API_KEY });
+        const response = await client.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+            }
+        });
+        const text = response.text;
+        if (!text) {
+            throw new Error("No text returned from Gemini");
+        }
+        const parsed = JSON.parse(text);
+        return parsed;
     }
     catch (error) {
         logger_1.default.error("Failed to create session feedback", {

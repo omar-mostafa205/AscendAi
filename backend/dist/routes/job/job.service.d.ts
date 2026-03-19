@@ -8,6 +8,7 @@ declare const _default: {
     getJobs: (userId: string) => Promise<{
         id: string;
         createdAt: Date;
+        userId: string;
         title: string;
         company: string;
         jobDescription: string;
@@ -15,6 +16,7 @@ declare const _default: {
     getJobById: (jobId: string, userId: string) => Promise<{
         id: string;
         createdAt: Date;
+        userId: string;
         title: string;
         company: string;
         jobDescription: string;

@@ -143,7 +143,7 @@ const getLiveToken = async (req, res) => {
         res.status(404).json({ error: "Session not found" });
         return;
     }
-    const validated = liveTokenBodySchema.safeParse(req.body);
+    const validated = liveTokenBodySchema.safeParse(req.query);
     if (!validated.success) {
         res.status(400).json({ error: validated.error.flatten().fieldErrors });
         return;

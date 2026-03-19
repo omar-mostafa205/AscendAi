@@ -56,7 +56,6 @@ export function useSpeechRecognition(opts: {
     rec.onend = () => {
       setIsListening(false)
       recRef.current = null
-      // Keep the experience "hands free": auto-restart unless user explicitly stopped.
       if (wantListeningRef.current) {
         window.setTimeout(() => start(), 250)
       }
@@ -86,7 +85,6 @@ export function useSpeechRecognition(opts: {
     setIsListening(false)
   }, [])
 
-  // Stable UI label
   const label = useMemo(() => {
     if (!isSupported) return "Speech Not Supported"
     return isListening ? "Mic On" : "Mic Off"

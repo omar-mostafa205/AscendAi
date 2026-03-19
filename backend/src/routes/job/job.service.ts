@@ -27,6 +27,7 @@ const getJobs = async (userId: string) => {
     where: { userId },
     select: {
       id: true,
+      userId: true,
       title: true,
       company: true,
       jobDescription: true,
@@ -44,6 +45,7 @@ const getJobById = async (jobId: string, userId: string) => {
     where: { id: jobId },
     select: {
       id: true,
+      userId: true,
       title: true,
       company: true,
       jobDescription: true,

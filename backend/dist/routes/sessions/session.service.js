@@ -61,6 +61,7 @@ async function getSession(sessionId, userId) {
         where: { id: sessionId, userId },
         select: {
             id: true,
+            jobId: true,
             scenarioType: true,
             status: true,
             startedAt: true,
@@ -153,9 +154,18 @@ async function getLiveToken(sessionId, userId, scenarioType) {
                     sessionResumption: {},
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
+                    realtimeInputConfig: {
+                        automaticActivityDetection: {
+                            // Lower silence window = faster model start after you stop talking.
+                            startOfSpeechSensitivity: genai_1.StartSensitivity.START_SENSITIVITY_HIGH,
+                            endOfSpeechSensitivity: genai_1.EndSensitivity.END_SENSITIVITY_HIGH,
+                            prefixPaddingMs: 80,
+                            silenceDurationMs: 250,
+                        },
+                    },
                     speechConfig: {
                         voiceConfig: {
-                            prebuiltVoiceConfig: { voiceName: "Aoede" },
+                            prebuiltVoiceConfig: { voiceName: `${scenarioType == "background" ? "Aoede" : "Charon"}` },
                         },
                     },
                 },
@@ -166,7 +176,7 @@ async function getLiveToken(sessionId, userId, scenarioType) {
     if (!token?.name) {
         throw new Error("Failed to create live token");
     }
-    return { token: token.name, model: env_1.env.GEMINI_LIVE_MODEL };
+    return { token: token.name, sessionId, model: env_1.env.GEMINI_LIVE_MODEL };
 }
 exports.sessionService = {
     createSession,

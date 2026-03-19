@@ -116,7 +116,7 @@ export const getLiveToken = async (req: Request, res: Response): Promise<void> =
     return
   }
 
-  const validated = liveTokenBodySchema.safeParse(req.body)
+  const validated = liveTokenBodySchema.safeParse(req.query)
   if (!validated.success) {
     res.status(400).json({ error: validated.error.flatten().fieldErrors })
     return

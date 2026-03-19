@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Mic, MicOff, Phone, Settings, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
+import { Mic, MicOff, Phone, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import Image from "next/image";
 import { useSocket } from "@/features/session/hooks/useSocket";
-import { SessionService } from "@/features/session/services/session.service";
 import { useGeminiLive } from "@/features/session/hooks/useGeminiLive";
+import { useSimulation } from "@/features/session/hooks/useSimulation";
+import { SessionService } from "@/features/session/services/session.service";
 
 type ScenarioType = "technical" | "background" | "culture";
 
@@ -18,7 +19,7 @@ interface InterviewSession {
   jobTitle: string;
   company: string;
   startedAt: string;
-  status?: string;
+  jobId: string;
 }
 
 const scenarioConfig: Record<ScenarioType, { label: string; image: string }> = {
@@ -44,7 +45,10 @@ export default function InterviewSessionPage() {
   const sessionId = params?.id as string;
 
   const [session, setSession] = useState<InterviewSession | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingSession, setLoadingSession] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const elapsedTime = useElapsedTime();
 
   useEffect(() => {
     if (!sessionId) return;
@@ -53,66 +57,89 @@ export default function InterviewSessionPage() {
       try {
         const res = await SessionService.getSession(sessionId);
         const data = res.data;
-
-        if (cancelled) return;
-
-        const status = data.status as string | undefined
-        if (data.endedAt || status === "processing" || status === "completed") {
-          router.push(`/feedback/${sessionId}`)
-          return
+        if (!cancelled) {
+          if (data.endedAt || data.status === "processing" || data.status === "completed") {
+            router.push(`/feedback/${sessionId}`);
+            return;
+          }
+          setSession({
+            id: data.id,
+            scenarioType: data.scenarioType,
+            jobTitle: data.job?.title ?? "Interview Session",
+            company: data.job?.company ?? "",
+            startedAt: data.startedAt,
+            jobId: data.jobId,
+          });
         }
-
-        setSession({
-          id: data.id,
-          scenarioType: data.scenarioType,
-          jobTitle: data.job?.title ?? "Interview Session",
-          company: data.job?.company ?? "",
-          startedAt: data.startedAt,
-          status: status ?? "active",
-        });
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadingSession(false);
       }
     })();
     return () => { cancelled = true; };
   }, [sessionId, router]);
 
-  const { sessionJoined, isEnded, endSession } = useSocket(sessionId);
+  // ─── Hooks ────────────────────────────────────────────────────────────────
+  const simulation = useSimulation();
+  const { saveMessage, endSession, isEnded, sessionJoined } = useSocket(sessionId);
+
+  const onSaveMessage = useCallback(
+    (role: "user" | "assistant", content: string) => saveMessage(role, content),
+    [saveMessage]
+  );
+
   const {
-    isConnected,
-    isMuted,
-    isMicActive,
-    isUserSpeaking,
-    isModelSpeaking,
-    hasAudio,
-    error,
     connect,
-    startInterview,
     disconnect,
+    interrupt,
     startMic,
     stopMic,
-    toggleMute,
-  } = useGeminiLive(sessionId, session?.scenarioType)
+    flushPendingTranscripts,
+    isConnected,
+    isModelSpeaking,
+    isUserSpeaking,
+    isMicActive,
+    error,
+  } = useGeminiLive(session?.jobId ?? "", sessionId, onSaveMessage, {
+    onUserStartedSpeaking: simulation.onUserStartedSpeaking,
+    onUserStoppedSpeaking: simulation.onUserStoppedSpeaking,
+    onAiStartedResponding: simulation.onAiStartedResponding,
+    onAiFinishedSpeaking: simulation.onAiFinishedSpeaking,
+  });
 
-  const elapsedTime = useElapsedTime();
-
+  // ─── Connect Gemini after session loads ───────────────────────────────────
   useEffect(() => {
-    if (!sessionId || !session?.scenarioType) return
-    let cancelled = false
-    ;(async () => {
+    if (!session) return;
+    let cancelled = false;
+    simulation.setStage("fetching_token");
+    simulation.setLoadingStep("fetching_token", false);
+    (async () => {
       try {
-        if (cancelled) return
-        await connect()
-      } catch (err) {
-        console.error("Failed to connect to Gemini Live", err)
+        simulation.setStage("connecting_gemini");
+        simulation.setLoadingStep("fetching_token", true);
+        await connect();
+        if (!cancelled) {
+          simulation.setLoadingStep("connecting_gemini", true);
+          simulation.setStage("ready");
+        }
+      } catch (e) {
+        if (!cancelled) simulation.setStage("error");
       }
-    })()
+    })();
     return () => {
-      cancelled = true
-      disconnect()
-    }
-  }, [sessionId, session?.scenarioType, connect, disconnect])
+      cancelled = true;
+      disconnect();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
+  // ─── Auto-start mic once connected + joined ───────────────────────────────
+  useEffect(() => {
+    if (sessionJoined && isConnected && !isMicActive) {
+      startMic().catch(console.error);
+    }
+  }, [sessionJoined, isConnected, isMicActive, startMic]);
+
+  // ─── Redirect on session ended via socket ─────────────────────────────────
   useEffect(() => {
     if (isEnded) {
       stopMic();
@@ -121,54 +148,55 @@ export default function InterviewSessionPage() {
     }
   }, [isEnded, stopMic, disconnect, router, sessionId]);
 
-  useEffect(() => {
-    if (!sessionJoined) return;
-    if (!isConnected) return;
-    if (isMicActive) return;
-    startMic().catch((e) => console.error("Failed to auto-start mic", e));
-  }, [sessionJoined, isConnected, isMicActive, startMic]);
+  // ─── End interview handler ────────────────────────────────────────────────
+  const handleEndInterview = useCallback(async () => {
+    console.log("🔚 Ending interview session...");
+    interrupt();
+    stopMic();
+    // Flush any pending transcripts so they are saved to the database
+    // before the socket disconnects and the session ends.
+    flushPendingTranscripts();
+    endSession();
+    disconnect();
+    router.push(`/feedback/${sessionId}`);
+  }, [interrupt, stopMic, flushPendingTranscripts, endSession, disconnect, router, sessionId]);
 
-  useEffect(() => {
-    if (!sessionJoined) return
-    if (!isConnected) return
-    startInterview().catch((e) => console.error("Failed to start interview", e))
-    // fire once per join/connect
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionJoined, isConnected])
+  // ─── Toggle speaker mute ──────────────────────────────────────────────────
+  const toggleMute = useCallback(() => {
+    setMuted((prev) => !prev);
+  }, []);
 
-  const handleEndInterview = async () => {
-    try {
-      await stopMic()
-    } catch (e) {
-      console.error("Failed to stop recording before ending interview", e)
-    }
+  // ─── Loading screen ───────────────────────────────────────────────────────
+  const showLoading = loadingSession || simulation.stage === "fetching_token" || simulation.stage === "connecting_gemini" || simulation.stage === "initializing_ai";
+  const loadingProgress = simulation.loadingSteps.find(s => !s.completed)?.progress ?? 100;
+  const loadingLabel = simulation.loadingSteps.find(s => !s.completed)?.label ?? "Ready";
 
-    try {
-      await SessionService.endSession(sessionId)
-    } catch (e) {
-      console.error("Failed to end session via API, falling back to socket", e)
-      endSession()
-    } finally {
-      await disconnect()
-      router.push(`/feedback/${sessionId}`)
-    }
-  };
-
-  if (loading || !session) {
+  if (showLoading) {
     return (
       <div className="min-h-screen bg-[#f5f2ef] flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center w-72">
           <div className="w-16 h-16 border-4 border-[#1b1917] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-[#676662]">Starting interview session...</p>
+          <p className="text-[#1b1917] font-medium mb-3">{loadingLabel}</p>
+          <div className="w-full h-2 bg-[#e5e1dc] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#1b1917] rounded-full transition-all duration-700"
+              style={{ width: `${loadingProgress}%` }}
+            />
+          </div>
+          <p className="text-[#676662] text-sm mt-2">{loadingProgress}%</p>
         </div>
       </div>
     );
   }
 
+  if (!session) return null;
+
   const config = scenarioConfig[session.scenarioType];
+  const aiSpeakingPriority = isModelSpeaking;
 
   return (
     <div className="h-screen bg-[#f5f2ef] flex flex-col overflow-hidden">
+      {/* Header */}
       <div className="px-8 pt-6 pb-4 flex items-start justify-between z-10">
         <div>
           <h1 className="text-3xl font-serif text-[#1f1f1f] mb-1">{session.jobTitle}</h1>
@@ -176,59 +204,18 @@ export default function InterviewSessionPage() {
             {session.company} • {config.label} Round
           </p>
         </div>
-
         <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${
-            isConnected
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-[#e5e1dc] bg-white text-[#676662]"
-          }`}>
-            {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-            {isConnected ? "Live" : "Connecting…"}
-          </div>
-
-          {sessionJoined && (
-            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              Session active
-            </div>
-          )}
-
-          {isConnected && sessionJoined && !hasAudio && (
-            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700">
-              Audio fallback
-            </div>
-          )}
-
           <div className="px-4 py-2">
             <p className="text-3xl font-bold text-[#1b1917] tabular-nums">{elapsedTime}</p>
           </div>
         </div>
       </div>
 
+      {/* Main Card */}
       <div className="flex-1 relative">
         <div className="absolute inset-0 px-8 pb-8">
           <Card className="w-full h-full bg-white border-[#e5e1dc] overflow-hidden rounded-3xl">
             <div className="w-full h-full flex items-end justify-center relative">
-              
-              {isModelSpeaking && (
-                <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10">
-                  <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm px-4 py-2 rounded-full flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    AI is speaking...
-                  </div>
-                </div>
-              )}
-
-              {isUserSpeaking && (
-                <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10">
-                  <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-2 rounded-full flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    Listening...
-                  </div>
-                </div>
-              )}
-
               <div className="relative w-full max-w-2xl aspect-square -mb-30">
                 <Image
                   src={`/${config.image}`}
@@ -253,23 +240,21 @@ export default function InterviewSessionPage() {
         )}
       </div>
 
+      {/* Controls */}
       <div className="p-8 flex items-center justify-center z-20">
         <div className="flex items-center gap-4">
+          {/* Mic */}
           <Button
             onClick={isMicActive ? stopMic : startMic}
             size="lg"
             className={`w-14 h-14 rounded-full p-0 ${
               isMicActive
-                ? "bg-green-600 hover:bg-green-700 text-white"
+                ? "bg-[#1b1917] hover:bg-gray-700 text-white"
                 : "bg-white border-2 border-[#e5e1dc] hover:bg-[#f0ebe6] text-[#1b1917]"
             }`}
-            title={isMicActive ? "Disable Mic" : "Enable Mic"}
+            title={isMicActive ? "Mute Mic" : "Unmute Mic"}
           >
-            {isMicActive ? (
-              <Mic className="w-5 h-5" />
-            ) : (
-              <MicOff className="w-5 h-5" />
-            )}
+            {isMicActive ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
           </Button>
 
           <Button
@@ -277,24 +262,16 @@ export default function InterviewSessionPage() {
             size="lg"
             variant="outline"
             className="w-14 h-14 rounded-full p-0 bg-white border-2 border-[#e5e1dc] hover:bg-[#f0ebe6]"
-            title={isMuted ? "Unmute AI" : "Mute AI"}
+            title={muted ? "Unmute Speaker" : "Mute Speaker"}
           >
-            {isMuted ? (
+            {muted ? (
               <VolumeX className="w-5 h-5 text-[#1b1917]" />
             ) : (
               <Volume2 className="w-5 h-5 text-[#1b1917]" />
             )}
           </Button>
 
-          <Button
-            size="lg"
-            variant="outline"
-            className="w-14 h-14 rounded-full p-0 bg-white border-2 border-[#e5e1dc] hover:bg-[#f0ebe6]"
-            title="Settings"
-          >
-            <Settings className="w-5 h-5 text-[#1b1917]" />
-          </Button>
-
+          {/* End */}
           <Button
             onClick={handleEndInterview}
             size="lg"

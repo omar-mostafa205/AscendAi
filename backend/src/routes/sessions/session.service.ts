@@ -69,6 +69,7 @@ async function getSession(sessionId: string, userId: string) {
     where: { id: sessionId, userId },
     select: {
       id: true,
+      jobId: true,
       scenarioType: true,
       status: true,
       startedAt: true,
@@ -181,9 +182,16 @@ async function getLiveToken(
           sessionResumption: {},
           inputAudioTranscription: {},
           outputAudioTranscription: {},
+          // Disable server-side activity detection so the client can send
+          // explicit `activityStart`/`activityEnd` signals for low-latency turn
+          // detection (otherwise responses can be delayed by long silence windows).
+          realtimeInputConfig: {
+            automaticActivityDetection: { disabled: true },
+          },
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: "Aoede" },
+              prebuiltVoiceConfig: { voiceName:`${scenarioType == "background" ? "Aoede" : "Charon"}`},
+               
             },
           },
         },
@@ -196,7 +204,7 @@ async function getLiveToken(
     throw new Error("Failed to create live token")
   }
 
-  return { token: token.name, model: env.GEMINI_LIVE_MODEL }
+  return { token: token.name, sessionId, model: env.GEMINI_LIVE_MODEL }
 }
 
 export const sessionService = {

@@ -30,9 +30,8 @@ export const SessionService = {
   endSession: (sessionId: string) =>
     ApiClient.post<ApiEnvelope<{ id: string; status: string }>>(`/sessions/${sessionId}/end`, {}),
 
-  getLiveToken: (sessionId: string, scenarioType: ScenarioType) =>
-    ApiClient.post<ApiEnvelope<{ token: string; model?: string }>>(
-      `/sessions/${sessionId}/live-token`,
-      { scenarioType }
+  getLiveToken: (sessionId: string) =>
+    ApiClient.get<ApiEnvelope<{ token: string; sessionId: string; model?: string }>>(
+      `/sessions/${sessionId}/live-token`
     ),
 } as const
