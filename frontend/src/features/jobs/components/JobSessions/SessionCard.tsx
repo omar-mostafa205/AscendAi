@@ -1,73 +1,87 @@
-import { useRouter } from "next/navigation";
 import { Eye, Code, Users, FileText, CheckCircle, Clock, AlertCircle } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Session, ScenarioType, SessionStatus } from "../../types";
-import { formatRelativeTime } from "@/lib/utils";
+import { Badge } from "@/shared/components/ui/badge";
+import { Button } from "@/shared/components/ui/button";
+import { Card, CardContent } from "@/shared/components/ui/card";
+import { formatRelativeTime } from "@/shared/lib/utils";
+import { ScenarioType, Session, SessionStatus } from "../../types";
 
-const scenarioConfig: Record<ScenarioType, {
-  label: string;
-  badge: string;
-  description: string;
-  icon: React.ElementType;
-  iconColor: string;
-  image: string;
-}> = {
+const scenarioConfig: Record<
+  ScenarioType,
+  {
+    label: string;
+    badge: string;
+    backgroundColor: string;
+    description: string;
+    icon: React.ElementType;
+    iconColor: string;
+    image: string;
+  }
+> = {
   technical: {
     label: "Technical",
     badge: "Technical",
+    backgroundColor: "#efecfd",
     description: "Technical Round",
     icon: Code,
     iconColor: "text-blue-900",
-    image: "interviewer-1.png",
+    image: "purple-avatar.png",
   },
   background: {
     label: "Background",
+    backgroundColor: "#eef7fd",
     badge: "Background",
     description: "Background Round",
     icon: Users,
     iconColor: "text-purple-900",
-    image: "interviewer-2.png",
+    image: "blue-avatar.png",
   },
   culture: {
     label: "Culture",
+    backgroundColor: "#fdede7",
     badge: "Culture",
     description: "Culture Round",
     icon: FileText,
     iconColor: "text-orange-700",
-    image: "interviewer-3.png",
+    image: "orange-avatar.png",
   },
 };
 
-const statusConfig: Record<SessionStatus, {
-  label: string;
-  icon: React.ElementType;
-}> = {
-  completed:   { label: "Completed",   icon: CheckCircle },
+const statusConfig: Record<
+  SessionStatus,
+  {
+    label: string;
+    icon: React.ElementType;
+  }
+> = {
+  completed: { label: "Completed", icon: CheckCircle },
   in_progress: { label: "In Progress", icon: Clock },
-  pending:     { label: "Pending",     icon: AlertCircle },
-  processing:  { label: "Processing",  icon: Clock },
-  active:      { label: "In Progress", icon: Clock },
+  pending: { label: "Pending", icon: AlertCircle },
+  processing: { label: "Processing", icon: Clock },
+  active: { label: "In Progress", icon: Clock },
 };
 
 export { scenarioConfig };
 
-const card = "bg-white/70 border-1 border-[#b9b1ab] rounded-2xl shadow-lg";
+const cardClass = "bg-white/70 border-1 border-[#b9b1ab] rounded-2xl shadow-lg";
 
-export function SessionCard({ session }: { session: Session }) {
-  const router = useRouter();
+export function SessionCard({
+  session,
+  onViewFeedback,
+}: {
+  session: Session;
+  onViewFeedback?: (id: string) => void;
+}) {
   const scenarioConf = scenarioConfig[session.scenarioType];
-  const statusConf   = statusConfig[session.status];
+  const statusConf = statusConfig[session.status];
   const ScenarioIcon = scenarioConf?.icon ?? FileText;
-  const StatusIcon   = statusConf?.icon ?? AlertCircle;
+  const StatusIcon = statusConf?.icon ?? AlertCircle;
 
   return (
-    <Card className={`hover:shadow-md transition-shadow ${card}`}>
+    <Card className={`hover:shadow-md transition-shadow ${cardClass}`}>
       <CardContent className="pt-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: scenarioConf.backgroundColor }}>
               <ScenarioIcon className={`w-5 h-5 ${scenarioConf.iconColor}`} />
             </div>
             <div>
@@ -75,9 +89,9 @@ export function SessionCard({ session }: { session: Session }) {
               <p className="text-sm text-[#676662]">{formatRelativeTime(session.createdAt)}</p>
             </div>
           </div>
-          {(session as any).score !== null && (session as any).score !== undefined && (
+          {session.overallScore !== null && session.overallScore !== undefined && (
             <div className="text-right">
-              <div className="text-2xl font-bold text-[#1b1917]">{(session as any).score}</div>
+              <div className="text-2xl font-bold text-[#1b1917]">{session.overallScore}</div>
               <div className="text-xs text-[#676662]">Score</div>
             </div>
           )}
@@ -91,7 +105,7 @@ export function SessionCard({ session }: { session: Session }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push(`/feedback/${session.id}`)}
+              onClick={() => onViewFeedback?.(session.id)}
               className="gap-2 border-[#e5e1dc] text-[#1b1917] hover:bg-[#f0ebe6]"
             >
               <Eye className="w-4 h-4" />
@@ -103,3 +117,4 @@ export function SessionCard({ session }: { session: Session }) {
     </Card>
   );
 }
+

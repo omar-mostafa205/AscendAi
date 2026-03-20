@@ -1,6 +1,6 @@
 import { Session } from "@/features/jobs/types"
-import { ApiClient } from "@/lib/api/api.client"
-import { ApiEnvelope } from "@/lib/api/types"
+import { ApiClient } from "@/shared/lib/api/api.client"
+import { ApiEnvelope } from "@/shared/lib/api/types"
 
 type ScenarioType = "technical" | "background" | "culture"
 

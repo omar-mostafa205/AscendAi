@@ -74,27 +74,25 @@ const registerSessionHandlers = (io, socket) => {
                 logger_1.default.warn("flushPendingMessages: session not found", { sessionId, userId });
                 return;
             }
-            const existingRaw = Array.isArray(session.messages) ? session.messages : [];
-            const existing = existingRaw
-                .map((m) => {
-                const role = m?.role === "assistant" ? "assistant" : "user";
-                return {
-                    role,
-                    content: String(m?.content ?? ""),
-                    createdAt: String(m?.createdAt ?? new Date(0).toISOString()),
-                };
-            })
-                .filter((m) => m.content.trim().length > 0);
+            // ✅ FIX: Handle null messages properly
+            const existing = session.messages
+                ? (Array.isArray(session.messages) ? session.messages : [])
+                : [];
+            // Build deduplicated merged list
             const merged = [...existing];
             for (const m of pending) {
-                const prev = merged[merged.length - 1];
-                if (prev && prev.role === m.role && prev.content === m.content)
-                    continue;
-                merged.push(m);
+                // Skip if this exact message already exists
+                const isDuplicate = merged.some((msg) => msg.role === m.role && msg.content === m.content);
+                if (!isDuplicate) {
+                    merged.push(m);
+                }
             }
-            await database_1.prisma.interviewSession.updateMany({
-                where: { id: sessionId, userId },
-                data: { messages: merged },
+            // ✅ FIX: Proper JSON update
+            await database_1.prisma.interviewSession.update({
+                where: { id: sessionId },
+                data: {
+                    messages: merged
+                },
             });
             logger_1.default.debug("Messages flushed to session.messages", {
                 sessionId,

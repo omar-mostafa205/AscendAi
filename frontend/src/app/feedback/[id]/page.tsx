@@ -3,10 +3,10 @@
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/shared/components/ui/card";
+import { Button } from "@/shared/components/ui/button";
 import { SessionService } from "@/features/session/services/session.service";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/shared/lib/supabase";
 
 type ScenarioType = "technical" | "background" | "culture";
 
@@ -22,7 +22,6 @@ export default function FeedbackPage() {
     enabled: !!sessionId,
   });
 
-  // ─── Supabase Realtime: listen for status → completed ──────────────────
   useEffect(() => {
     if (!sessionId) return;
 
@@ -95,9 +94,7 @@ export default function FeedbackPage() {
       { label: "Communication", key: "communicationScore" },
       { label: "Problem Solving", key: "problemSolvingScore" },
     ],
-    culture: [
-      { label: "Communication", key: "communicationScore" },
-    ],
+    culture: [{ label: "Communication", key: "communicationScore" }],
   };
 
   return (
@@ -115,7 +112,6 @@ export default function FeedbackPage() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {/* Overall Score */}
             <Card className="bg-white/70 border border-[#b9b1ab] rounded-2xl shadow-lg">
               <CardContent className="pt-6">
                 <h2 className="text-xl font-medium text-[#1f1f1f] mb-2">Overall Score</h2>
@@ -126,14 +122,13 @@ export default function FeedbackPage() {
               </CardContent>
             </Card>
 
-            {/* Score breakdown */}
             {feedback && scoreFields[scenarioType]?.length > 0 && (
               <Card className="bg-white/70 border border-[#b9b1ab] rounded-2xl shadow-lg">
                 <CardContent className="pt-6">
                   <h2 className="text-xl font-medium text-[#1f1f1f] mb-4">Score Breakdown</h2>
                   <div className="space-y-3">
                     {scoreFields[scenarioType].map(({ label, key }) => {
-                      const score = feedback?.[key] ?? 0;
+                      const score = Number(feedback?.[key] ?? 0);
                       return (
                         <div key={key}>
                           <div className="flex justify-between text-sm mb-1">
@@ -143,7 +138,7 @@ export default function FeedbackPage() {
                           <div className="w-full h-2 bg-[#e5e1dc] rounded-full">
                             <div
                               className="h-2 bg-[#1b1917] rounded-full transition-all duration-700"
-                              style={{ width: `${score}%` }}
+                              style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
                             />
                           </div>
                         </div>
@@ -154,7 +149,6 @@ export default function FeedbackPage() {
               </Card>
             )}
 
-            {/* Details */}
             <Card className="bg-white/70 border border-[#b9b1ab] rounded-2xl shadow-lg">
               <CardContent className="pt-6 space-y-5">
                 <div>
@@ -202,3 +196,4 @@ export default function FeedbackPage() {
     </div>
   );
 }
+

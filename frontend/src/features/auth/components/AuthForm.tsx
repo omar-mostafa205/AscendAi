@@ -7,10 +7,10 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { GithubLogo, GoogleLogo } from "@/components/Logos";
+} from "@/shared/components/ui/form";
+import { Input } from "@/shared/components/ui/input";
+import { Button } from "@/shared/components/ui/button";
+import { GithubLogo, GoogleLogo } from "@/shared/components/Logos";
 import { useAuthForm } from "@/features/auth/hooks/useAuthForm";
 
 const OAUTH_PROVIDERS = [

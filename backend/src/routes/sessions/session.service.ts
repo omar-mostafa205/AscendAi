@@ -5,7 +5,7 @@ import { env } from "../../config/env"
 import { personaService } from "./persona.service"
 import { buildLiveInterviewPrompt } from "../../services/ai/prompts/live.prompt"
 import { analysisQueue } from "../../queues/session-analysis-queue"
-type ScenarioType = "technical" | "background" | "culture"  
+type ScenarioType = "technical" | "background" | "culture"
 
 async function createSession(
   userId: string,
@@ -74,6 +74,8 @@ async function getSession(sessionId: string, userId: string) {
       status: true,
       startedAt: true,
       endedAt: true,
+      overallScore: true,
+      feedback: true,
       job: {
         select: {
           title: true,
@@ -169,7 +171,6 @@ async function getLiveToken(
   })
 
   const systemPrompt = buildLiveInterviewPrompt(job, persona, resolvedScenarioType)
-
   const token = await client.authTokens.create({
     config: {
       uses: 1,
@@ -180,23 +181,26 @@ async function getLiveToken(
           systemInstruction: systemPrompt,
           responseModalities: [Modality.AUDIO],
           sessionResumption: {},
-          inputAudioTranscription: {},
+
+
+          inputAudioTranscription: {
+          },
+  
           outputAudioTranscription: {},
-          // Disable server-side activity detection so the client can send
-          // explicit `activityStart`/`activityEnd` signals for low-latency turn
-          // detection (otherwise responses can be delayed by long silence windows).
+  
           realtimeInputConfig: {
             automaticActivityDetection: { disabled: true },
           },
+  
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName:`${scenarioType == "background" ? "Aoede" : "Charon"}`},
-               
+              prebuiltVoiceConfig: {
+                voiceName: resolvedScenarioType === "background" ? "Aoede" : "Charon",
+              },
             },
           },
         },
       },
-      httpOptions: { apiVersion: "v1alpha" },
     },
   })
 

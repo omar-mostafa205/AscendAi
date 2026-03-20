@@ -1,5 +1,9 @@
-import { redirect } from "next/navigation";
+import HeroSection from "@/shared/components/HeroSection";
 
 export default function LandingPage() {
-  redirect("/jobs");
+  return (
+  <>
+    <HeroSection /> 
+  </>
+  )
 }

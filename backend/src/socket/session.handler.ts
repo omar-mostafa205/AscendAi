@@ -58,16 +58,14 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         return
       }
   
-      // ✅ FIX: Handle null messages properly
-      const existing: SessionMessage[] = session.messages 
-        ? (Array.isArray(session.messages) ? session.messages : [])
+      const existingUnknown: unknown = session.messages
+      const existing: SessionMessage[] = Array.isArray(existingUnknown)
+        ? (existingUnknown as SessionMessage[])
         : []
   
-      // Build deduplicated merged list
       const merged: SessionMessage[] = [...existing]
   
       for (const m of pending) {
-        // Skip if this exact message already exists
         const isDuplicate = merged.some(
           (msg) => msg.role === m.role && msg.content === m.content
         )
@@ -76,7 +74,6 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         }
       }
   
-      // ✅ FIX: Proper JSON update
       await prisma.interviewSession.update({
         where: { id: sessionId },
         data: { 
@@ -229,8 +226,6 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
           endedAt: new Date() 
         },
       })
-
-      // Flush again in case some messages arrived while we were ending.
       await flushPendingMessages(sessionId)
 
       try {

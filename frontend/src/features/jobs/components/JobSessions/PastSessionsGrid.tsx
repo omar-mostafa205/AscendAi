@@ -1,19 +1,29 @@
 import { FileText } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { SessionCard } from "./SessionCard";
 import { Session } from "../../types";
-
+import { FeedbackDialog } from "@/features/session/components/FeedbackDialog";
 
 const card = "bg-white/70 border-1 border-[#b9b1ab] rounded-2xl shadow-lg";
 
 interface PastSessionsGridProps {
   sessions: Session[];
+  initialSelectedSessionId?: string | null;
 }
 
-export function PastSessionsGrid({ sessions }: PastSessionsGridProps) {
+export function PastSessionsGrid({ sessions, initialSelectedSessionId }: PastSessionsGridProps) {
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialSelectedSessionId) {
+      setSelectedSessionId(initialSelectedSessionId);
+    }
+  }, [initialSelectedSessionId]);
+
   return (
     <Card className={card}>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-[#1f1f1f]">Past Practice Sessions</CardTitle>
       </CardHeader>
       <CardContent>
@@ -27,11 +37,20 @@ export function PastSessionsGrid({ sessions }: PastSessionsGridProps) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {sessions.map((session) => (
-              <SessionCard key={session.id} session={session} />
+              <SessionCard key={session.id} session={session} onViewFeedback={(id) => setSelectedSessionId(id)} />
             ))}
           </div>
         )}
       </CardContent>
+
+      {selectedSessionId && (
+        <FeedbackDialog
+          sessionId={selectedSessionId}
+          isOpen={!!selectedSessionId}
+          onOpenChange={(open) => !open && setSelectedSessionId(null)}
+        />
+      )}
     </Card>
   );
 }
+

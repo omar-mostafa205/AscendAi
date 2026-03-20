@@ -30,7 +30,6 @@ export const startSessionWorker = async (): Promise<void> => {
       const messages = Array.isArray(session.messages) ? (session.messages as any[]) : []
       if (messages.length === 0) {
         logger.warn("No messages found for session", { sessionId })
-        // Prevent sessions from getting stuck in "processing" forever.
         await prisma.interviewSession.update({
           where: { id: sessionId },
           data: {

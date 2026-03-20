@@ -154,14 +154,11 @@ async function getLiveToken(sessionId, userId, scenarioType) {
                     sessionResumption: {},
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
+                    // Disable server-side activity detection so the client can send
+                    // explicit `activityStart`/`activityEnd` signals for low-latency turn
+                    // detection (otherwise responses can be delayed by long silence windows).
                     realtimeInputConfig: {
-                        automaticActivityDetection: {
-                            // Lower silence window = faster model start after you stop talking.
-                            startOfSpeechSensitivity: genai_1.StartSensitivity.START_SENSITIVITY_HIGH,
-                            endOfSpeechSensitivity: genai_1.EndSensitivity.END_SENSITIVITY_HIGH,
-                            prefixPaddingMs: 80,
-                            silenceDurationMs: 250,
-                        },
+                        automaticActivityDetection: { disabled: true },
                     },
                     speechConfig: {
                         voiceConfig: {

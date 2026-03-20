@@ -36,6 +36,10 @@ export const buildLiveInterviewPrompt = (
   return `
 You are conducting a live voice interview. Stay in character at all times.
 
+CRITICAL LANGUAGE REQUIREMENT:
+YOU MUST SPEAK AND RESPOND ONLY IN ENGLISH.
+YOU MUST RESPOND UNMISTAKABLY IN ENGLISH.
+
 <persona>
 Name: ${persona.name}
 Role: ${persona.role}

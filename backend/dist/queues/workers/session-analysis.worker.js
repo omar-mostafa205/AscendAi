@@ -61,7 +61,6 @@ const startSessionWorker = async () => {
         const messages = Array.isArray(session.messages) ? session.messages : [];
         if (messages.length === 0) {
             logger_1.default.warn("No messages found for session", { sessionId });
-            // Prevent sessions from getting stuck in "processing" forever.
             await database_1.prisma.interviewSession.update({
                 where: { id: sessionId },
                 data: {

@@ -1,6 +1,6 @@
-import { ApiClient } from "@/lib/api/api.client";
+import { ApiClient } from "@/shared/lib/api/api.client";
 import { CreateJob, Job } from "../types";
-import { ApiEnvelope } from "@/lib/api/types";
+import { ApiEnvelope } from "@/shared/lib/api/types";
 
 export const JobService = {
     getJobs: () =>

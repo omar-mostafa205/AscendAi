@@ -1,9 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/shared/components/ui/button";
+import { Card, CardContent } from "@/shared/components/ui/card";
 import { useJobSessions } from "@/features/jobs/hooks/useJobSessions";
 import { ScenarioPicker } from "./ScenarioPicker";
 import { PastSessionsGrid } from "./PastSessionsGrid";
@@ -16,6 +17,16 @@ interface JobSessionsClientProps {
 
 export function JobSessionsClient({ id }: JobSessionsClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const feedbackSessionId = searchParams.get("feedbackSessionId");
+  const [autoOpenSessionId, setAutoOpenSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!feedbackSessionId || autoOpenSessionId) return;
+    setAutoOpenSessionId(feedbackSessionId);
+    router.replace(`/jobs/${id}`, { scroll: false });
+  }, [feedbackSessionId, autoOpenSessionId, router, id]);
+
   const {
     job,
     isLoading,
@@ -101,9 +112,9 @@ export function JobSessionsClient({ id }: JobSessionsClientProps) {
           creating={creating}
         />
 
-        <PastSessionsGrid sessions={sessions ?? []} />
-
+        <PastSessionsGrid sessions={sessions ?? []} initialSelectedSessionId={autoOpenSessionId} />
       </div>
     </div>
   );
 }
+

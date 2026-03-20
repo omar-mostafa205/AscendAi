@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react"
-import { useSocketContext } from "@/context/SocketContext"
+import { useSocketContext } from "@/shared/context/SocketContext"
 
 export const useSocket = (sessionId: string) => {
   const { socket } = useSocketContext()

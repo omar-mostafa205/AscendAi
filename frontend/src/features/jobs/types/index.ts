@@ -40,3 +40,14 @@ type ScenarioType = "technical" | "background" | "culture"
 type SessionStatus = "completed" | "in_progress" | "pending" | "processing" | "active";
 
 export type { Job , CreateJob , ScenarioType , SessionStatus , JobDetail , Session}
+export interface DashboardStats {
+  totalSessions: number;
+  averageScore: number;
+  improvementPercentage: number;
+  scoreProgression: Array<{ session: number; score: number; date: string }>;
+}
+
+export const CARD_STYLES = {
+  className: "bg-white rounded-2xl shadow-sm",
+  style: { border: "1px solid #b9b1ab" },
+} as const;

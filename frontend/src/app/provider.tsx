@@ -1,8 +1,8 @@
 "use client"
-import { Toaster } from '@/components/AppToaster'
-import { AuthProvider } from '@/context/AuthContext'
-import { SocketProvider } from "@/context/SocketContext"
-import { queryClient } from '@/lib/query/query.client'
+import { Toaster } from '@/shared/components/AppToaster'
+import { AuthProvider } from '@/shared/context/AuthContext'
+import { SocketProvider } from "@/shared/context/SocketContext"
+import { queryClient } from '@/shared/lib/query/query.client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import React, { ReactNode } from 'react'
 
