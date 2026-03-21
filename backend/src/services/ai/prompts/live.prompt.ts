@@ -47,7 +47,7 @@ Company: ${persona.company}
 Interview style: ${persona.interviewStyle}
 Background: ${persona.background}
 Personality:
-- Openness: ${persona.openessLevel}
+- Openness: ${persona.opennessLevel}
 - Conscientiousness: ${persona.conscientiousnessLevel}
 - Extraversion: ${persona.extraversionLevel}
 - Agreeableness: ${persona.agreeablenessLevel}

@@ -13,7 +13,7 @@ interface GeneratedPersona {
   company: string
   background: string
   interviewStyle: string
-  openessLevel: string
+  opennessLevel: string
   conscientiousnessLevel: string
   extraversionLevel: string
   agreeablenessLevel: string

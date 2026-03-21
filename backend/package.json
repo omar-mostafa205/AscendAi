@@ -8,6 +8,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
+    "postinstall": "prisma generate",
     "test": "npm run test:e2e",
     "test:e2e": "node scripts/e2e.cjs"
   },
@@ -20,7 +21,7 @@
     "@langchain/google-genai": "^2.1.13",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.1",
     "@prisma/adapter-pg": "^7.4.2",
-    "@prisma/client": "^7.3.0",
+    "@prisma/client": "^7.4.0",
     "@sentry/node": "^10.37.0",
     "@sentry/profiling-node": "^10.38.0",
     "@supabase/supabase-js": "^2.98.0",

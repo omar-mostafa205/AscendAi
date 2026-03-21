@@ -41,13 +41,13 @@ model Job {
 model Persona {
     id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
     jobId                  String   @map("job_id") @db.Uuid
-    type                   String // "technical" | "behavioral" | "system_design"
+    type                   String
     name                   String
     role                   String
     company                String?
     background             String?  @db.Text
     interviewStyle         String   @map("interview_style")
-    openessLevel           String   @map("openess_level")
+    opennessLevel          String   @map("openness_level")
     conscientiousnessLevel String   @map("conscientiousness_level")
     extraversionLevel      String   @map("extraversion_level")
     agreeablenessLevel     String   @map("agreeableness_level")
@@ -67,14 +67,11 @@ model InterviewSession {
     userId          String    @map("user_id") @db.Uuid
     jobId           String?   @map("job_id") @db.Uuid
     personaId       String?   @map("persona_id") @db.Uuid
-    voiceId         String?   @map("voice_id")
     scenarioType    String    @map("scenario_type")
     difficultyLevel String    @default("medium") @map("difficulty_level")
     status          String    @default("active")
-    livekitRoomName String?   @unique @map("livekit_room_name")
     startedAt       DateTime  @default(now()) @map("started_at")
     endedAt         DateTime? @map("ended_at")
-    durationSeconds Int?      @map("duration_seconds")
     overallScore    Int?      @map("overall_score")
     feedback        Json?
     createdAt       DateTime  @default(now()) @map("created_at")

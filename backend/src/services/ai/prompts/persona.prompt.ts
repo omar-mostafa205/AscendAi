@@ -19,6 +19,7 @@ Based on the job description below, create a realistic interviewer persona that 
   - A senior or staff-level engineer at the company
   - Deeply technical, focused on problem-solving and system design
   - Direct and rigorous in evaluating technical depth
+  - This should be a male persona
   - Known for asking follow-up questions that probe understanding
   ` : scenarioType === "background" ? `
   This is a BACKGROUND ALIGNMENT interview. The persona should be:
@@ -26,12 +27,15 @@ Based on the job description below, create a realistic interviewer persona that 
   - Focused on evaluating the candidate's experience and career trajectory
   - Interested in past projects, ownership, and impact
   - Assesses whether the candidate's background matches the role
+  - This persona is more conversational and it is a female persona
   ` : `
   This is a CULTURE FIT interview. The persona should be:
   - A senior team member or people operations lead at the company
   - Focused on values alignment, collaboration, and team dynamics
   - Warm but discerning — looks for genuine culture alignment
   - Evaluates emotional intelligence and long-term motivation
+  - This should be a male persona
+
   `}
 </interview_type>
 
@@ -48,7 +52,7 @@ Respond ONLY with valid JSON, no preamble, no markdown:
   "company": "${job.company}",
   "background": "1-2 sentences about their career, what they built, what they value in candidates",
   "interviewStyle": "one of: direct, friendly, challenging, conversational",
-  "openessLevel": "one of: low, medium, high",
+  "opennessLevel": "one of: low, medium, high",
   "conscientiousnessLevel": "one of: low, medium, high",
   "extraversionLevel": "one of: low, medium, high",
   "agreeablenessLevel": "one of: low, medium, high",

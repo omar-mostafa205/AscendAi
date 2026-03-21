@@ -29,6 +29,8 @@ function shouldIgnoreTranscript(inputRaw: string): boolean {
   if (!input) return true;
   if (/^[\.\,\!\?\-–—]+$/.test(input)) return true;
 
+  // Enforce "English-ish" transcripts only (Gemini API doesn't support languageCodes hints
+  // for audio transcription on the public Gemini endpoint).
   const lower = input.toLowerCase();
   const filler = new Set([
     "um",
@@ -53,14 +55,20 @@ function shouldIgnoreTranscript(inputRaw: string): boolean {
 }
 
 function mergeTranscript(prevRaw: string | null, nextRaw: string): string {
-  const prev = normalizeTranscript(prevRaw ?? "");
-  const next = normalizeTranscript(nextRaw);
-  if (!prev) return next;
-  if (!next) return prev;
-  
-  // Keep the longest (Gemini sends full transcript each time)
-  if (next.length >= prev.length) return next;
-  return prev;
+  if (!prevRaw) return normalizeTranscript(nextRaw);
+  if (!nextRaw) return normalizeTranscript(prevRaw);
+
+  const prevNorm = normalizeTranscript(prevRaw);
+  const nextNorm = normalizeTranscript(nextRaw);
+
+  if (nextNorm.startsWith(prevNorm)) return nextNorm;
+  if (prevNorm.startsWith(nextNorm)) return prevNorm;
+
+  // Use raw input to determine if a space is needed.
+  // STT tokens starting with a space indicate a new word.
+  // Punctuation or sub-word tokens usually don't have leading spaces in STT.
+  const needsSpace = nextRaw.startsWith(" ") || prevRaw.endsWith(" ");
+  return `${prevNorm}${needsSpace ? " " : ""}${nextNorm}`;
 }
 
 export const useGeminiLive = (
@@ -105,22 +113,12 @@ export const useGeminiLive = (
   const isInitialTriggerRef = useRef(true);
   const lastUserTranscriptUpdateAtRef = useRef<number>(0);
   const lastAssistantTranscriptUpdateAtRef = useRef<number>(0);
-  const userTranscriptStableTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const assistantTranscriptStableTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const finalizeUserAfterSilenceTimerRef = useRef<number | null>(null);
   const hasSentSetupRef = useRef(false);
   const hasReceivedSetupCompleteRef = useRef(false);
 
+  // ── Flush any unsaved transcripts ──────────────────────────────────────────
   const flushPendingTranscripts = useCallback(() => {
-    // Clear any pending timers
-    if (userTranscriptStableTimerRef.current) {
-      clearTimeout(userTranscriptStableTimerRef.current);
-      userTranscriptStableTimerRef.current = null;
-    }
-    if (assistantTranscriptStableTimerRef.current) {
-      clearTimeout(assistantTranscriptStableTimerRef.current);
-      assistantTranscriptStableTimerRef.current = null;
-    }
-
     const userTranscript = pendingUserTranscriptRef.current
       ? normalizeTranscript(pendingUserTranscriptRef.current)
       : null;
@@ -193,6 +191,8 @@ export const useGeminiLive = (
     nextPlayTimeRef.current = 0;
     
     const ws = sessionRef.current;
+    // Gemini Live requires `setup` to be the first message. Don't send anything
+    // until we receive `setupComplete`.
     if (ws && ws.readyState === WebSocket.OPEN && hasReceivedSetupCompleteRef.current) {
       try {
         ws.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [] }], turnComplete: true } }));
@@ -207,6 +207,7 @@ export const useGeminiLive = (
   const disconnect = useCallback(() => {
     console.log("Disconnecting from Live API...");
 
+    // Flush any unsaved transcripts BEFORE tearing down the socket
     flushPendingTranscripts();
 
     if (scriptProcessorRef.current) {
@@ -249,6 +250,7 @@ export const useGeminiLive = (
       setError(null);
       console.log("Fetching Live API token...");
 
+      // Protocol guards for this connection attempt.
       hasSentSetupRef.current = false;
       hasReceivedSetupCompleteRef.current = false;
 
@@ -261,15 +263,20 @@ export const useGeminiLive = (
 
       console.log("Ephemeral token support is experimental and may change in future versions.");
 
+      // Ephemeral auth tokens require the constrained websocket method + access_token parameter.
       const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(token)}`;
       const ws = new window.WebSocket(wsUrl);
       sessionRef.current = ws;
 
       ws.onopen = () => {
+        // Gemini Live API requires a setup message as the very first client message.
         if (hasSentSetupRef.current) return;
         hasSentSetupRef.current = true;
+        // Session resumption: if we have a handle from a prior connection, include it in setup.
+        // Docs: setup.sessionResumption.handle
         const resumeHandle = sessionHandleRef.current ?? getStoredSessionHandle(sessionId);
 
+        // Enable audio transcriptions. AudioTranscriptionConfig has no fields.
         ws.send(
           JSON.stringify({
             setup: {
@@ -291,11 +298,13 @@ export const useGeminiLive = (
            msg = JSON.parse(event.data);
         }
         
+        // Server acknowledges setup with setupComplete → now we are truly connected
         if (msg.setupComplete !== undefined) {
           console.log("setupComplete received");
           hasReceivedSetupCompleteRef.current = true;
           setIsConnected(true);
 
+          // Kick off the interview so the AI speaks first.
           if (!hasSentKickoffRef.current && sessionRef.current?.readyState === WebSocket.OPEN) {
             hasSentKickoffRef.current = true;
             isInitialTriggerRef.current = true;
@@ -313,72 +322,6 @@ export const useGeminiLive = (
 
         if (msg.serverContent) {
           const { serverContent } = msg;
-
-          // Buffer user transcript + schedule save after stabilization
-          if (serverContent.inputTranscription) {
-            const transcript = serverContent.inputTranscription.text;
-            if (transcript && !shouldIgnoreTranscript(transcript)) {
-              pendingUserTranscriptRef.current = mergeTranscript(pendingUserTranscriptRef.current, transcript);
-              lastUserTranscriptUpdateAtRef.current = Date.now();
-              
-              // Clear existing timer
-              if (userTranscriptStableTimerRef.current) {
-                clearTimeout(userTranscriptStableTimerRef.current);
-              }
-              
-              // Save after 800ms of no new updates (transcript stabilized)
-              userTranscriptStableTimerRef.current = setTimeout(() => {
-                const userTranscript = pendingUserTranscriptRef.current
-                  ? normalizeTranscript(pendingUserTranscriptRef.current)
-                  : null;
-                if (userTranscript && 
-                    !shouldIgnoreTranscript(userTranscript) && 
-                    userTranscript !== lastSavedUserTranscriptRef.current) {
-                  lastSavedUserTranscriptRef.current = userTranscript;
-                  onSaveMessage("user", userTranscript);
-                  console.log("💬 Saved user:", userTranscript);
-                  pendingUserTranscriptRef.current = null;
-                  lastUserTranscriptUpdateAtRef.current = 0;
-                }
-              }, 800);
-            }
-          }
-
-          // Buffer assistant transcript + schedule save after stabilization
-          if (serverContent.outputTranscription){
-            const transcript = serverContent.outputTranscription.text;
-            if (transcript && !shouldIgnoreTranscript(transcript)) {
-              pendingAssistantTranscriptRef.current = mergeTranscript(pendingAssistantTranscriptRef.current, transcript);
-              lastAssistantTranscriptUpdateAtRef.current = Date.now();
-          
-              if (userStopTalkingTimeRef.current > 0) {
-                const responseTime = Math.round(performance.now() - userStopTalkingTimeRef.current);
-                console.log(`Response time: ${responseTime}ms (user stop → output transcription)`);
-                userStopTalkingTimeRef.current = 0;
-              }
-              
-              // Clear existing timer
-              if (assistantTranscriptStableTimerRef.current) {
-                clearTimeout(assistantTranscriptStableTimerRef.current);
-              }
-              
-              // Save after 800ms of no new updates (transcript stabilized)
-              assistantTranscriptStableTimerRef.current = setTimeout(() => {
-                const assistantTranscript = pendingAssistantTranscriptRef.current
-                  ? normalizeTranscript(pendingAssistantTranscriptRef.current)
-                  : null;
-                if (assistantTranscript && 
-                    !shouldIgnoreTranscript(assistantTranscript) && 
-                    assistantTranscript !== lastSavedAssistantTranscriptRef.current) {
-                  lastSavedAssistantTranscriptRef.current = assistantTranscript;
-                  onSaveMessage("assistant", assistantTranscript);
-                  console.log("💬 Saved assistant:", assistantTranscript);
-                  pendingAssistantTranscriptRef.current = null;
-                  lastAssistantTranscriptUpdateAtRef.current = 0;
-                }
-              }, 800);
-            }
-          }
 
           if (serverContent.modelTurn) {
             if (!isModelSpeakingRef.current) {
@@ -407,9 +350,49 @@ export const useGeminiLive = (
               nextPlayTimeRef.current = 0;
             }
 
+            // Save assistant transcript once per completed model turn.
+            const assistantTranscript = pendingAssistantTranscriptRef.current
+              ? normalizeTranscript(pendingAssistantTranscriptRef.current)
+              : null;
+            if (assistantTranscript && !shouldIgnoreTranscript(assistantTranscript)) {
+              if (assistantTranscript !== lastSavedAssistantTranscriptRef.current) {
+                lastSavedAssistantTranscriptRef.current = assistantTranscript;
+                onSaveMessage("assistant", assistantTranscript);
+                console.log("Saved assistant transcript (turnComplete):", assistantTranscript.substring(0, 80));
+              }
+            }
+
+            // Reset assistant transcript buffer for next turn.
+            // Note: inputTranscription has no guaranteed ordering vs other server messages,
+            // so we avoid clearing the user transcript buffer here to prevent dropping late updates.
+            console.log("Reset assistant transcript buffer");
+            pendingAssistantTranscriptRef.current = null;
+            lastAssistantTranscriptUpdateAtRef.current = 0;
+
             if (isInitialTriggerRef.current) {
               isInitialTriggerRef.current = false;
               console.log("Initial trigger phase completed");
+            }
+          }
+
+          if (serverContent.outputTranscription){
+            const transcript = serverContent.outputTranscription.text;
+            if (transcript && !shouldIgnoreTranscript(transcript)) {
+              pendingAssistantTranscriptRef.current = mergeTranscript(pendingAssistantTranscriptRef.current, transcript);
+              lastAssistantTranscriptUpdateAtRef.current = Date.now();
+          
+              if (userStopTalkingTimeRef.current > 0) {
+                const responseTime = Math.round(performance.now() - userStopTalkingTimeRef.current);
+                console.log(`Response time: ${responseTime}ms (user stop → output transcription)`);
+                userStopTalkingTimeRef.current = 0;
+              }
+            }
+          }
+          if (serverContent.inputTranscription) {
+            const transcript = serverContent.inputTranscription.text;
+            if (transcript && !shouldIgnoreTranscript(transcript)) {
+              pendingUserTranscriptRef.current = mergeTranscript(pendingUserTranscriptRef.current, transcript);
+              lastUserTranscriptUpdateAtRef.current = Date.now();
             }
           }
 
@@ -514,6 +497,7 @@ export const useGeminiLive = (
         const SPEECH_ON = 0.012;
         const SPEECH_OFF = 0.007;
         const SILENCE_MS = 1200;
+        const FINALIZE_DELAY_MS = 950;
 
         const now = performance.now();
 
@@ -526,6 +510,13 @@ export const useGeminiLive = (
             callbacks?.onUserStartedSpeaking?.();
             console.log("User started speaking (audio detected)");
 
+            // Clear any pending finalize from a previous utterance
+            if (finalizeUserAfterSilenceTimerRef.current) {
+              window.clearTimeout(finalizeUserAfterSilenceTimerRef.current);
+              finalizeUserAfterSilenceTimerRef.current = null;
+            }
+
+            // Explicit activity signals.
             if (
               sessionRef.current &&
               sessionRef.current.readyState === window.WebSocket.OPEN &&
@@ -551,6 +542,27 @@ export const useGeminiLive = (
             ) {
               sessionRef.current.send(JSON.stringify({ realtimeInput: { activityEnd: {} } }));
             }
+
+            // Save once after silence to avoid word-by-word DB writes.
+            if (finalizeUserAfterSilenceTimerRef.current) {
+              window.clearTimeout(finalizeUserAfterSilenceTimerRef.current);
+              finalizeUserAfterSilenceTimerRef.current = null;
+            }
+            finalizeUserAfterSilenceTimerRef.current = window.setTimeout(() => {
+              const updatedAt = lastUserTranscriptUpdateAtRef.current;
+              const age = updatedAt > 0 ? Date.now() - updatedAt : Infinity;
+              if (age < 1400) return; // let late STT updates land
+              const t = pendingUserTranscriptRef.current ? normalizeTranscript(pendingUserTranscriptRef.current) : "";
+              if (!t || shouldIgnoreTranscript(t)) return;
+              if (t === lastSavedUserTranscriptRef.current) return;
+              lastSavedUserTranscriptRef.current = t;
+              onSaveMessage("user", t);
+              console.log("Saved user transcript (finalized on silence):", t.substring(0, 80));
+
+              // Clear after persist so the next utterance starts clean.
+              pendingUserTranscriptRef.current = null;
+              lastUserTranscriptUpdateAtRef.current = 0;
+            }, FINALIZE_DELAY_MS);
           }
         }
         
@@ -567,6 +579,7 @@ export const useGeminiLive = (
         }
         const base64Audio = btoa(binary);
 
+        // Always stream if there's meaningful sound, even if VAD missed the start.
         const shouldSendAudio = !isModelSpeakingRef.current || avg > 0.004;
 
         if (
@@ -617,6 +630,7 @@ export const useGeminiLive = (
       audioContextRef.current = null;
     }
 
+    // Tell the server the audio stream ended (helps the Live API finalize turns).
     if (
       sessionRef.current &&
       sessionRef.current.readyState === window.WebSocket.OPEN &&

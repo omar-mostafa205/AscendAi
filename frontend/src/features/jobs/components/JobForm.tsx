@@ -85,7 +85,7 @@ export function JobForm({ form, isPending, onSubmit, onCancel }: JobFormProps) {
                 <Textarea
                   placeholder="Paste the job description here — we'll use it to tailor your interview practice..."
                   rows={5}
-                  maxLength={4000}
+                  maxLength={5000}
                   className="rounded-xl border-[#b9b1ab] bg-[#faf8f6] placeholder:text-[#b9b1ab] text-[#1f1f1f] resize-none
                     focus-visible:ring-1 focus-visible:ring-[#1b1917] focus-visible:border-[#1b1917]
                     hover:border-[#8a837c] transition-colors max-h-40"
@@ -95,7 +95,7 @@ export function JobForm({ form, isPending, onSubmit, onCancel }: JobFormProps) {
               <div className="flex justify-between items-center mt-1">
                 <FormMessage className="text-xs text-red-500" />
                 <span className="text-xs text-[#b9b1ab] ml-auto">
-                  {field.value.length} / 4000
+                  {field.value.length} / 5000
                 </span>
               </div>
             </FormItem>
