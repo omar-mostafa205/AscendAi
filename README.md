@@ -1,6 +1,6 @@
 # AscendAI — Realtime Interview Practice
 
-<img src="/frontend/public/README.png" alt="Screenshot" width="400"/>
+<img src="/frontend/public/README.png" alt="Screenshot" width="1000"/>
 
 AscendAI is a full‑stack app for practicing interview sessions with a realtime, voice‑based AI interviewer (STT + TTS) using Gemini Live. Sessions are saved to the database and a background worker generates structured feedback after the interview ends.
 
