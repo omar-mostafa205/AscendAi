@@ -28,7 +28,7 @@ async function bootstrap() {
 
     await startSessionWorker()
 
-    const PORT = env.PORT || 8001
+    const PORT = env.PORT 
 
     server.listen(PORT, () => {
       logger.info("Server started", {
