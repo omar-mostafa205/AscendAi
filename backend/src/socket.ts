@@ -24,12 +24,31 @@ function getAllowedOrigins(): string[] {
 export const initializeSocket = (httpServer: HttpServer): Server => {
   const allowedOrigins = getAllowedOrigins()
 
+  console.log("🔧 Socket.IO CORS Config:", allowedOrigins)
+
   io = new Server(httpServer, {
     cors: {
       origin: (origin, callback) => {
-        if (!origin) return callback(null, true)
-        const ok = allowedOrigins.includes(normalizeOrigin(origin))
-        callback(ok ? null : new Error("Not allowed by CORS"), ok)
+        if (!origin) {
+          console.log("✅ WebSocket: No origin - allowing")
+          return callback(null, true)
+        }
+
+        const normalized = normalizeOrigin(origin)
+        const isAllowed = allowedOrigins.includes(normalized)
+
+        console.log("🔍 WebSocket CORS Check:", {
+          origin: normalized,
+          isAllowed: isAllowed
+        })
+
+        if (isAllowed) {
+          console.log("✅ WebSocket origin allowed:", normalized)
+          callback(null, true) // ✅ FIXED
+        } else {
+          console.log("❌ WebSocket origin blocked:", normalized)
+          callback(null, false) // ✅ FIXED - don't throw error
+        }
       },
       methods: ["GET", "POST", "OPTIONS"],
       credentials: true,

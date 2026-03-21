@@ -28,30 +28,64 @@ export const createServer = () => {
   const server = http.createServer(app)
 
   const allowedOrigins = getAllowedOrigins()
+  
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+  console.log("🔧 CORS Configuration:")
+  console.log("   FRONTEND_URL:", env.FRONTEND_URL)
+  console.log("   Allowed Origins:", allowedOrigins)
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
   const corsOptions: cors.CorsOptions = {
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true) // non-browser or same-origin
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) {
+        console.log("✅ No origin - allowing")
+        return callback(null, true)
+      }
+
       const normalized = normalizeOrigin(origin)
-      const ok = allowedOrigins.includes(normalized)
-      callback(ok ? null : new Error("Not allowed by CORS"), ok)
+      const isAllowed = allowedOrigins.includes(normalized)
+      
+      console.log("🔍 CORS Check:", {
+        origin: normalized,
+        isAllowed: isAllowed,
+        allowedOrigins: allowedOrigins
+      })
+
+      if (isAllowed) {
+        console.log("✅ Origin allowed:", normalized)
+        callback(null, true) // ✅ FIXED: Just return true
+      } else {
+        console.log("❌ Origin blocked:", normalized)
+        callback(null, false) // ✅ FIXED: Return false, DON'T throw error
+      }
     },
     credentials: true,
-    methods: ["GET", "POST", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Authorization", "Content-Type"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type", "Accept"],
   }
 
   app.use(cors(corsOptions))
-  // Express 5 + path-to-regexp v6 does not accept "*" as a path pattern.
   app.options(/.*/, cors(corsOptions))
-  app.use(helmet())
+  
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+    })
+  )
+  
   app.use(express.json())
   app.use(express.urlencoded({ extended: true }))
   app.use(requestLogger)
 
-  app.get("/health", (_, res) => {
+  app.get("/health", (req, res) => {
     res.json({
       status: "healthy",
       timestamp: new Date().toISOString(),
+      cors: {
+        allowedOrigins: allowedOrigins,
+        requestOrigin: req.headers.origin,
+      }
     })
   })
 
