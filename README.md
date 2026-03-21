@@ -1,6 +1,6 @@
 # AscendAI — Realtime Interview Practice
 
-<img src="/Users/omarmostafa/Desktop/ascendai/frontend/public/README.png" alt="Screenshot" width="400"/>
+<img src="/frontend/public/README.png" alt="Screenshot" width="400"/>
 
 AscendAI is a full‑stack app for practicing interview sessions with a realtime, voice‑based AI interviewer (STT + TTS) using Gemini Live. Sessions are saved to the database and a background worker generates structured feedback after the interview ends.
 
@@ -51,7 +51,7 @@ flowchart LR
   DB["Postgres (Prisma)"]
   REDIS["Redis (BullMQ)"]
   WORKER["session-analysis.worker"]
-  GEM["Gemini Live WS + Gemini models"]
+  GEM["Gemini Live WS and Gemini models"]
 
   UI -->|Bearer token| API
   UI -->|join_session/save_message/end_session| WS
@@ -60,7 +60,7 @@ flowchart LR
   API -->|enqueue analyze_session| REDIS
   REDIS --> WORKER
   WORKER -->|read messages, write feedback| DB
-  UI -->|Gemini Live WebSocket (ephemeral token)| GEM
+  UI -->|Gemini Live WebSocket ephemeral token| GEM
   API -->|/sessions/:id/live-token| UI
 ```
 
@@ -74,7 +74,7 @@ sequenceDiagram
   participant UI as Next.js UI
   participant API as Express API
   participant WS as Socket.IO
-  participant GEM as Gemini Live (WS)
+  participant GEM as Gemini Live WS
   participant DB as Postgres
   participant REDIS as Redis/BullMQ
   participant WORKER as Feedback Worker
@@ -248,11 +248,11 @@ Low latency is primarily achieved by preventing main-thread overload and WebSock
    - Mic hook: `frontend/src/features/session/hooks/useGeminiMic.ts`
 
 2. **Chunking mic audio to reduce WS send frequency**  
-   Sending audio frames too frequently causes CPU overhead (base64 + JSON) and WS congestion, which shows up as “AI started responding” taking seconds.  
+   Sending audio frames too frequently causes CPU overhead (base64 + JSON) and WS congestion, which shows up as "AI started responding" taking seconds.  
    We chunk at `CHUNK_SAMPLES = 640` @ 16kHz → ~40ms → ~25 sends/sec.
 
 3. **VAD + explicit activityStart/activityEnd**  
-   Fast and consistent turn-end signaling reduces “turn-taking latency” (model starts responding sooner).  
+   Fast and consistent turn-end signaling reduces "turn-taking latency" (model starts responding sooner).  
    `SILENCE_DURATION_MS` controls the safety vs speed tradeoff.
 
 4. **Optimized PCM16 base64 encoding**  
@@ -440,7 +440,7 @@ Frontend updates:
 
 ## Troubleshooting
 
-### “Failed to enqueue analysis job” / “Connection is closed”
+### "Failed to enqueue analysis job" / "Connection is closed"
 
 This means BullMQ could not enqueue the job because Redis is unavailable.
 
