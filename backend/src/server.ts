@@ -37,7 +37,6 @@ export const createServer = () => {
 
   const corsOptions: cors.CorsOptions = {
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, etc.)
       if (!origin) {
         console.log("✅ No origin - allowing")
         return callback(null, true)
@@ -54,10 +53,10 @@ export const createServer = () => {
 
       if (isAllowed) {
         console.log("✅ Origin allowed:", normalized)
-        callback(null, true) // ✅ FIXED: Just return true
+        callback(null, true) // ← MAKE SURE THIS IS HERE
       } else {
         console.log("❌ Origin blocked:", normalized)
-        callback(null, false) // ✅ FIXED: Return false, DON'T throw error
+        callback(null, false) // ← MAKE SURE THIS IS HERE (not new Error)
       }
     },
     credentials: true,
@@ -86,6 +85,33 @@ export const createServer = () => {
         allowedOrigins: allowedOrigins,
         requestOrigin: req.headers.origin,
       }
+    })
+  })
+
+  // ✅ ADD THIS DEBUG ENDPOINT HERE (before routes)
+  app.get("/api/v1/debug/cors", (req, res) => {
+    const testOrigin = "https://ascendxai.vercel.app"
+    const normalized = normalizeOrigin(testOrigin)
+    
+    res.json({
+      environment: {
+        FRONTEND_URL: env.FRONTEND_URL,
+        NODE_ENV: env.NODE_ENV,
+      },
+      parsed: {
+        allowedOrigins: getAllowedOrigins(),
+      },
+      request: {
+        origin: req.headers.origin,
+        host: req.headers.host,
+        method: req.method,
+      },
+      test: {
+        testOrigin: testOrigin,
+        normalized: normalized,
+        wouldAllow: getAllowedOrigins().includes(normalized),
+      },
+      currentCorsCallback: "Check if using callback(null, true/false) instead of throwing error"
     })
   })
 
