@@ -81,9 +81,6 @@ export function SessionCard({
       <CardContent className="pt-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: scenarioConf.backgroundColor }}>
-              <ScenarioIcon className={`w-5 h-5 ${scenarioConf.iconColor}`} />
-            </div>
             <div>
               <h4 className="font-medium text-[#1f1f1f]">{scenarioConf?.label ?? "Session"}</h4>
               <p className="text-sm text-[#676662]">{formatRelativeTime(session.createdAt)}</p>
