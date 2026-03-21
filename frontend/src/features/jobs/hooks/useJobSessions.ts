@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { JobService } from "../services/job.service"
 import { SessionService } from "@/features/session/services/session.service"
 import { ScenarioType } from "../types"
+import type { Session } from "../types"
 
 export function useJobSessions(jobId: string) {
   const router = useRouter()
@@ -26,9 +27,12 @@ export function useJobSessions(jobId: string) {
     isLoading: sessionsLoading,
   } = useQuery({
     queryKey: ["sessions", jobId],
-    queryFn: () => SessionService.getSessions(jobId),
+    queryFn: async () => (await SessionService.getSessions(jobId)).data,
     enabled: !!jobId,
-    select: (res) => res.data,
+    refetchInterval: (query) => {
+      const list = (query.state.data as Session[] | undefined) ?? [];
+      return list.some((s) => s.status === "processing") ? 2000 : false;
+    },
   })
 
   const { mutate: startInterview, isPending: creating } = useMutation({

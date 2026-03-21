@@ -15,17 +15,19 @@ interface InterviewSessionClientProps {
 }
 
 export function InterviewSessionClient({ sessionId }: InterviewSessionClientProps) {
-  const elapsedTime = Timer();
   const { session, loading: loadingSession } = useSessionData(sessionId);
   
   const {
     simulation,
     isMicActive,
+    micStartedAtMs,
     error,
     startMic,
     stopMic,
     handleEndInterview,
   } = useInterviewSession(sessionId, session);
+
+  const elapsedTime = Timer(micStartedAtMs);
 
   const { muted, toggleMute, handleToggleMic } = useSessionControls(
     isMicActive,
@@ -37,12 +39,22 @@ export function InterviewSessionClient({ sessionId }: InterviewSessionClientProp
     loadingSession || 
     simulation.stage === "fetching_token" || 
     simulation.stage === "connecting_gemini" || 
-    simulation.stage === "initializing_ai";
+    simulation.stage === "initializing_ai" ||
+    simulation.stage === "generating_persona";
 
   if (showLoading) {
-    const currentStep = simulation.loadingSteps.find(s => !s.completed);
-    const progress = currentStep?.progress ?? 100;
-    const label = currentStep?.label ?? "Ready";
+    const keyByStage: Record<string, string> = {
+      idle: "initializing_ai",
+      initializing_ai: "initializing_ai",
+      generating_persona: "generating_persona",
+      fetching_token: "fetching_token",
+      connecting_gemini: "connecting_gemini",
+      ready: "ready",
+    };
+    const key = keyByStage[simulation.stage] ?? "initializing_ai";
+    const step = simulation.loadingSteps.find((s) => s.key === key);
+    const progress = step?.progress ?? 20;
+    const label = step?.label ?? "Initializing AI Session";
 
     return <LoadingScreen progress={progress} label={label} />;
   }

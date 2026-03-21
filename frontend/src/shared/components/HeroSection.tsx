@@ -73,10 +73,9 @@ export default function HeroSection() {
         </div>
 
         <p className="text-sm text-[#6b6b6b] mt-1">
-          Trusted by 180K+ users
+          Trusted by 10K+ users
         </p>
 
-        {/* CTA */}
         <button 
         onClick={() => redirect("/jobs")}
         className="mt-8 flex items-center gap-2 px-6 py-3 rounded-lg bg-[#1f1f1f] text-white text-sm hover:bg-neutral-800 shadow-sm">

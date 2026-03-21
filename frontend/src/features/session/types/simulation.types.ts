@@ -34,7 +34,7 @@ export const LOADING_STEPS: Record<LoadingStepKey, Omit<LoadingStep, "completed"
     progress: 20
   },
   generating_persona: {
-    label: "Generating Persona",
+    label: "Generating Dynamic Persona",
     description: "Building the interviewer persona...",
     progress: 40
   },
@@ -44,7 +44,7 @@ export const LOADING_STEPS: Record<LoadingStepKey, Omit<LoadingStep, "completed"
     progress: 60
   },
   connecting_gemini: {
-    label: "Connecting to Gemini Live",
+    label: "Connecting",
     description: "Establishing realtime websocket...",
     progress: 80
   },

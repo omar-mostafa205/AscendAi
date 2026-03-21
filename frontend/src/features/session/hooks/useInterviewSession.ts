@@ -1,9 +1,9 @@
 // features/session/hooks/useInterviewSession.ts
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "./useSocket";
-import { useGeminiLive } from "./useGeminiLive";
+import { useGeminiLive } from "./useGemini";
 import { useSimulation } from "./useSimulation";
 import { SessionService } from "../services/session.service";
 import { InterviewSession, MAX_SESSION_DURATION_MS } from "../types/session.types";
@@ -11,8 +11,10 @@ import { InterviewSession, MAX_SESSION_DURATION_MS } from "../types/session.type
 export function useInterviewSession(sessionId: string, session: InterviewSession | null) {
   const router = useRouter();
   const autoEndTimerRef = useRef<number | null>(null);
+  const isEndingRef = useRef(false);
   const simulation = useSimulation();
   const { saveMessage, endSession, isEnded, sessionJoined } = useSocket(sessionId);
+  const [micStartedAtMs, setMicStartedAtMs] = useState<number | null>(null);
 
   
   const onSaveMessage = useCallback(
@@ -31,7 +33,7 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
     isModelSpeaking,
     isMicActive,
     error,
-  } = useGeminiLive(session?.jobId ?? "", sessionId, onSaveMessage, {
+  } = useGeminiLive(sessionId, onSaveMessage, {
     onUserStartedSpeaking: simulation.onUserStartedSpeaking,
     onUserStoppedSpeaking: simulation.onUserStoppedSpeaking,
     onAiStartedResponding: simulation.onAiStartedResponding,
@@ -45,18 +47,35 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
     let cancelled = false;
 
     const initializeConnection = async () => {
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+      simulation.setStage("initializing_ai");
+      simulation.setLoadingStep("initializing_ai", false);
+      await sleep(250);
+      simulation.setLoadingStep("initializing_ai", true);
+
+      simulation.setStage("generating_persona");
+      await sleep(250);
+      simulation.setLoadingStep("generating_persona", false);
+      simulation.setLoadingStep("generating_persona", true);
+
       simulation.setStage("fetching_token");
       simulation.setLoadingStep("fetching_token", false);
       
       try {
-        simulation.setStage("connecting_gemini");
+        const res = await SessionService.getLiveToken(sessionId);
+        const token = res?.data?.token;
         simulation.setLoadingStep("fetching_token", true);
+
+        simulation.setStage("connecting_gemini");
+        simulation.setLoadingStep("connecting_gemini", false);
         
-        await connect();
+        await connect({ token });
         
         if (!cancelled) {
           simulation.setLoadingStep("connecting_gemini", true);
           simulation.setStage("ready");
+          simulation.setLoadingStep("ready", true);
         }
       } catch {
         if (!cancelled) simulation.setStage("error");
@@ -66,18 +85,30 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
     initializeConnection();
     return () => {
       cancelled = true;
+      // Ensure mic + socket are always torn down on unmount/session change.
+      isEndingRef.current = true;
+      stopMic();
       disconnect();
     };
   }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
   
   useEffect(() => {
+    if (isEndingRef.current) return;
     if (sessionJoined && isConnected && !isMicActive) {
-      startMic().catch(console.error);
+      (async () => {
+        try {
+          await startMic();
+          setMicStartedAtMs((prev) => prev ?? Date.now());
+        } catch (e) {
+          console.error(e);
+        }
+      })();
     }
   }, [sessionJoined, isConnected, isMicActive, startMic]);
 
   
   const handleEndInterview = useCallback(async () => {
+    isEndingRef.current = true;
     interrupt();
     stopMic();
     flushPendingTranscripts();
@@ -101,6 +132,7 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
   useEffect(() => {
     if (!isEnded) return;
 
+    isEndingRef.current = true;
     stopMic();
     disconnect();
     
@@ -113,14 +145,17 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
 
   
   useEffect(() => {
-    if (!session?.startedAt) return;
-
     if (autoEndTimerRef.current) {
       window.clearTimeout(autoEndTimerRef.current);
     }
 
-    const startedAtMs = new Date(session.startedAt).getTime();
-    const remainingMs = Math.max(0, startedAtMs + MAX_SESSION_DURATION_MS - Date.now());
+    const baseMs =
+      micStartedAtMs ??
+      (session?.startedAt ? new Date(session.startedAt).getTime() : null);
+
+    if (!baseMs || Number.isNaN(baseMs)) return;
+
+    const remainingMs = Math.max(0, baseMs + MAX_SESSION_DURATION_MS - Date.now());
 
     autoEndTimerRef.current = window.setTimeout(() => {
       handleEndInterview().catch(console.error);
@@ -132,13 +167,14 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
         autoEndTimerRef.current = null;
       }
     };
-  }, [session, handleEndInterview]);
+  }, [session, micStartedAtMs, handleEndInterview]);
 
   return {
     simulation,
     isConnected,
     isModelSpeaking,
     isMicActive,
+    micStartedAtMs,
     error,
     startMic,
     stopMic,
