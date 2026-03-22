@@ -23,9 +23,8 @@ export function useJobsData() {
   const sessionsQueries = useQueries({
     queries: jobs.map((job) => ({
       queryKey: ["sessions", job.id],
-      queryFn: () => SessionService.getSessions(job.id),
+      queryFn: async () => (await SessionService.getSessions(job.id)).data,
       enabled: !!job.id,
-      select: (res: any) => res.data,
     })),
   });
 
