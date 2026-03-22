@@ -51,7 +51,7 @@ export function FeedbackDialog({ sessionId, isOpen, onOpenChange }: FeedbackDial
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-<DialogContent className="!w-[calc(100vw-20rem)] !max-w-none max-h-[90vh] overflow-y-auto bg-[#f5f2ef] border-1 border-[#b9b1ab] rounded-2xl shadow-lg">
+<DialogContent aria-describedby={undefined} className="!w-[calc(100vw-20rem)] !max-w-none max-h-[90vh] overflow-y-auto bg-[#f5f2ef] border-1 border-[#b9b1ab] rounded-2xl shadow-lg">
 <h2 className="text-3xl font-serif mb-2 text-[#1f1f1f]">Interview Feedback</h2>
         <p className="text-[#676662] mb-6">Session: {sessionId}</p>
 

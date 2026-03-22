@@ -53,6 +53,7 @@ export function AddJobModal({ trigger }: AddJobModalProps) {
       </DialogTrigger>
 
       <DialogContent
+        aria-describedby={undefined}
         className="sm:max-w-[520px] p-0 overflow-hidden rounded-2xl bg-white"
         style={{ border: "1px solid #b9b1ab" }}
 >
