@@ -69,7 +69,6 @@ export const startSessionWorker = async (): Promise<void> => {
       return feedbackData
     },
     {
-      // Use the same Redis connection config as the Queue (supports Upstash/rediss).
       connection: redisQueue.options,
     }
   )

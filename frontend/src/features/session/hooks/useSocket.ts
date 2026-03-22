@@ -23,7 +23,7 @@ export const useSocket = (sessionId: string) => {
     }
 
     const handleError = (data: { message: string }) => {
-      // console.error("Socket error:", data.message)
+      console.error("Socket error:", data.message)
     }
 
     socket.on("session_joined", handleSessionJoined)
@@ -57,7 +57,7 @@ export const useSocket = (sessionId: string) => {
       }
       
       socket.emit("save_message", { sessionId, role, content })
-      // console.log('[useSocket] Message emitted to socket')
+      console.log('[useSocket] Message emitted to socket')
     }, [socket, sessionId])
 
   const endSession = useCallback(() => {

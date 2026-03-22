@@ -69,14 +69,11 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         const lastIdx = merged.length - 1
         const lastMsg = lastIdx >= 0 ? merged[lastIdx] : null
 
-        // If the new message is a continuation of the last one (same role & prefix), replace it.
         if (lastMsg && lastMsg.role === m.role && m.content.startsWith(lastMsg.content)) {
           merged[lastIdx] = m
           continue
         }
 
-        // Otherwise, skip if it's an exact duplicate of ANY previous message (to be safe),
-        // but typically we only care about the last one.
         const isDuplicate = merged.some(
           (msg) => msg.role === m.role && msg.content === m.content
         )
@@ -227,8 +224,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         return
       }
 
-      // Ensure the full conversation is persisted before ending the session.
-      await flushPendingMessages(sessionId)
+       await flushPendingMessages(sessionId)
 
       await prisma.interviewSession.updateMany({
         where: { id: sessionId, userId },

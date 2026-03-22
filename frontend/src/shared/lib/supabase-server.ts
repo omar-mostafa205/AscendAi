@@ -16,7 +16,7 @@ export function createClient() {
           try {
             await cookieStore.then(store => store.set({ name, value, ...options }))
           } catch (error) {
-            // console.error('Error setting cookie:', error)
+            console.error('Error setting cookie:', error)
             
         }
         },
@@ -24,7 +24,7 @@ export function createClient() {
           try {
             (await cookieStore).set({ name, value: '', ...options })
           } catch (error) {
-            // console.error('Error removing cookie:', error)
+            console.error('Error removing cookie:', error)
           }
         },
       },

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-// ─── Session Handle ───────────────────────────────────────────────────────────
+// Session Handle
 
 export function getStoredSessionHandle(sessionId: string): string | null {
   try {
@@ -16,7 +16,7 @@ export function storeSessionHandle(sessionId: string, handle: string): void {
   } catch {}
 }
 
-// ─── Transcript Normalization ─────────────────────────────────────────────────
+// Transcript Normalization
 
 export function normalizeTranscript(input: string | null | undefined): string {
   if (input == null) return "";
@@ -26,19 +26,14 @@ export function normalizeTranscript(input: string | null | undefined): string {
     .replace(/<noise>/gi, "")
     .replace(/\[(noise|silence)\]/gi, "")
     .replace(/\(silence\)/gi, "")
-    // FIX 1: Remove repeated characters (e.g. "therther" → "ther", "veryyyy" → "very")
-    .replace(/(.{3,}?)\1+/gi, "$1")
-    // FIX 2: Remove stutters — repeated single words (e.g. "and and and" → "and")
+    // Remove whole-word stutters only (e.g. "and and and" -> "and")
+    // Removed the character-pattern repeat regex — it was corrupting real words
     .replace(/\b(\w+)(\s+\1){2,}\b/gi, "$1")
     .trim();
 }
 
-// ─── Noise / Ignore Detection ─────────────────────────────────────────────────
+// Noise / Ignore Detection
 
-/**
- * FIX 3: Stronger noise detection.
- * Catches garbled multi-word chunks that passed through before.
- */
 export function shouldIgnoreTranscript(inputRaw: string | null | undefined): boolean {
   if (inputRaw == null) return true;
   const input = normalizeTranscript(inputRaw);
@@ -56,34 +51,23 @@ export function shouldIgnoreTranscript(inputRaw: string | null | undefined): boo
     if (!keep.has(input.toLowerCase())) return true;
   }
 
-  // Pure filler words
+  // Pure filler words (only if the entire transcript is just fillers)
   const lower = input.toLowerCase();
-  const filler = new Set([
-    "um", "uh", "erm", "hmm", "mm", "mhm", "ah", "eh", "ehm", "ähm", "uhm",
-  ]);
-  if (filler.has(lower) && input.split(" ").length <= 2) return true;
+  const filler = new Set(["um", "uh", "erm", "hmm", "mm", "mhm", "ah", "eh", "ehm", "uhm"]);
+  if (filler.has(lower)) return true;
 
   // No English letters or digits at all
   if (!/[a-zA-Z]/u.test(input) && !/\d/.test(input)) return true;
 
-  // FIX 4: Garble detection — too many "words" that are not real English-like tokens.
-  // A real word is 2+ chars with a vowel, or a known short word.
-  const words = input.split(" ").filter(Boolean);
-  if (words.length >= 3) {
-    const realWords = words.filter((w) => /[aeiou]/i.test(w) && w.length >= 2);
-    const realRatio = realWords.length / words.length;
-    // If fewer than 40% of words contain a vowel, likely garbled noise
-    if (realRatio < 0.4) return true;
-  }
+  // REMOVED: vowel ratio check — Gemini's split words (e.g. "dra sti cally") have
+  // a low vowel ratio but are real speech. This check was silently dropping user turns.
 
-  // FIX 5: Extremely high consonant-cluster density signals garbled STT output
-  const consonantClusters = (input.match(/[bcdfghjklmnpqrstvwxyz]{4,}/gi) || []).length;
-  if (consonantClusters >= 3) return true;
+  // REMOVED: consonant cluster check — same reason, split words trigger false positives.
 
   return false;
 }
 
-// ─── Transcript Merging ───────────────────────────────────────────────────────
+// Transcript Merging
 
 export function mergeTranscript(
   prevRaw: string | null,
@@ -105,7 +89,7 @@ export function mergeTranscript(
   return `${prevNorm} ${nextNorm}`;
 }
 
-// ─── Timer ────────────────────────────────────────────────────────────────────
+// Timer
 
 export function Timer(startedAtMs: number | null | undefined) {
   const getElapsedSeconds = () => {

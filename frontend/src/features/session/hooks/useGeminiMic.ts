@@ -4,12 +4,14 @@ import { shouldIgnoreTranscript, normalizeTranscript } from "../utils";
 
 const AUDIO_CONFIG = {
   INPUT_SAMPLE_RATE: 16000,
-  // Less sensitive VAD to avoid 1-letter/noise transcripts like "y".
+  LATENCY_HINT: "interactive",
   SPEECH_ON_THRESHOLD: 0.07,
   SPEECH_OFF_THRESHOLD: 0.03,
+
   SILENCE_DURATION_MS: 1600,
-  FINALIZE_DELAY_MS: 1250,
-  LATE_UPDATE_GRACE_MS: 2000,
+  FINALIZE_DELAY_MS: 2200,
+
+  LATE_UPDATE_GRACE_MS: 2500,
 } as const;
 
 export function useGeminiMic(
@@ -38,11 +40,18 @@ export function useGeminiMic(
     if (audioContextRef.current) return;
 
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
     });
     mediaStreamRef.current = stream;
 
-    const ctx = new AudioContext({ sampleRate: AUDIO_CONFIG.INPUT_SAMPLE_RATE });
+    const ctx = new AudioContext({
+      sampleRate: AUDIO_CONFIG.INPUT_SAMPLE_RATE,
+      latencyHint: "interactive",
+    });
     audioContextRef.current = ctx;
 
     await ctx.audioWorklet.addModule("/gemini-audio-processor.worklet.js");
@@ -66,11 +75,13 @@ export function useGeminiMic(
           isUserSpeakingSharedRef.current = true;
           setIsUserSpeaking(true);
           callbacks?.onUserStartedSpeaking?.();
+
+          // Cancel any pending finalize — user is still speaking
           if (finalizeTimerRef.current) {
             window.clearTimeout(finalizeTimerRef.current);
             finalizeTimerRef.current = null;
           }
-          // Enforce strict turn-taking on the server:
+
           if (!isModelSpeakingRef.current) {
             send(JSON.stringify({ realtimeInput: { activityStart: {} } }));
           }
@@ -80,26 +91,34 @@ export function useGeminiMic(
           isUserSpeakingSharedRef.current = false;
           setIsUserSpeaking(false);
           callbacks?.onUserStoppedSpeaking?.();
-          
+
           if (!isModelSpeakingRef.current) {
             send(JSON.stringify({ realtimeInput: { activityEnd: {} } }));
           }
 
           if (finalizeTimerRef.current) window.clearTimeout(finalizeTimerRef.current);
+
           finalizeTimerRef.current = window.setTimeout(() => {
-            const age = lastTranscriptUpdateAtRef.current > 0
-              ? Date.now() - lastTranscriptUpdateAtRef.current : Infinity;
+            const age =
+              lastTranscriptUpdateAtRef.current > 0
+                ? Date.now() - lastTranscriptUpdateAtRef.current
+                : Infinity;
+
             if (age < AUDIO_CONFIG.LATE_UPDATE_GRACE_MS) return;
+
             const raw = pendingUserTranscriptRef.current;
             if (!raw) return;
             const t = normalizeTranscript(raw);
-            if (!t || shouldIgnoreTranscript(raw) || t === lastSavedUserTranscriptRef.current) return;
+
+            if (
+              !t ||
+              shouldIgnoreTranscript(raw) ||
+              t === lastSavedUserTranscriptRef.current
+            )
+              return;
+
             lastSavedUserTranscriptRef.current = t;
             onSaveMessage("user", t);
-            // We DO NOT set pendingUserTranscriptRef.current to null here anymore!
-            // By keeping it, any future speech in this turn will be merged with this string.
-            // The backend's duplicate/prefix checking logic will automatically update the last message
-            // rather than inserting a brand new message, keeping the user's turn strictly as ONE chat block.
           }, AUDIO_CONFIG.FINALIZE_DELAY_MS);
         }
 
@@ -108,7 +127,6 @@ export function useGeminiMic(
 
       if (type !== "audioData") return;
 
-      // Enforce strict turn-taking: user cannot interrupt while the AI is speaking.
       if (isModelSpeakingRef.current) return;
 
       const pcm16 = data.pcm16;
@@ -116,23 +134,44 @@ export function useGeminiMic(
       if (!pcm16 || typeof amplitude !== "number") return;
 
       const base64 = convertPCM16ToBase64(pcm16);
-      send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64 }] } }));
+      send(
+        JSON.stringify({
+          realtimeInput: {
+            mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64 }],
+          },
+        })
+      );
     };
 
     const source = ctx.createMediaStreamSource(stream);
     sourceNodeRef.current = source;
     source.connect(workletNode);
     setIsMicActive(true);
-  }, [isModelSpeakingRef, send, isUserSpeakingSharedRef, callbacks, pendingUserTranscriptRef, lastSavedUserTranscriptRef, onSaveMessage]);
+  }, [
+    isModelSpeakingRef,
+    send,
+    isUserSpeakingSharedRef,
+    callbacks,
+    pendingUserTranscriptRef,
+    lastSavedUserTranscriptRef,
+    onSaveMessage,
+  ]);
+  const notifyTranscriptUpdate = useCallback(() => {
+    lastTranscriptUpdateAtRef.current = Date.now();
+  }, []);
 
   const stopMic = useCallback(() => {
+    if (finalizeTimerRef.current) {
+      window.clearTimeout(finalizeTimerRef.current);
+      finalizeTimerRef.current = null;
+    }
     audioWorkletNodeRef.current?.disconnect();
     audioWorkletNodeRef.current = null;
     sourceNodeRef.current?.disconnect();
     sourceNodeRef.current = null;
-    mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
     mediaStreamRef.current = null;
-    audioContextRef.current?.close().catch(() => { });
+    audioContextRef.current?.close().catch(() => {});
     audioContextRef.current = null;
     send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
     setIsMicActive(false);
@@ -140,5 +179,5 @@ export function useGeminiMic(
     setIsUserSpeaking(false);
   }, [send, isUserSpeakingSharedRef]);
 
-  return { startMic, stopMic, isMicActive, isUserSpeaking };
+  return { startMic, stopMic, isMicActive, isUserSpeaking, notifyTranscriptUpdate };
 }

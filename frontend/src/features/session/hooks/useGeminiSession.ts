@@ -11,6 +11,7 @@ export function useGeminiSession(
     onAiStartedResponding?: () => void;
     onAiFinishedSpeaking?: () => void;
     onTokenUsage?: () => void;
+    onInputTranscriptionUpdate?: () => void;
   }
 ) {
   const [isConnected, setIsConnected] = useState(false);
@@ -32,7 +33,6 @@ export function useGeminiSession(
   const pendingAssistantTranscriptRef = useRef<string | null>(null);
   const lastSavedUserTranscriptRef = useRef<string | null>(null);
   const lastSavedAssistantTranscriptRef = useRef<string | null>(null);
-  const lastUserTranscriptUpdateAtRef = useRef<number>(0);
   const lastAssistantTranscriptUpdateAtRef = useRef<number>(0);
 
   // playback refs
@@ -41,7 +41,6 @@ export function useGeminiSession(
   const nextPlayTimeRef = useRef<number>(0);
   const bufferedAiAudioRef = useRef<string[]>([]);
 
-  // expose send so useGeminiMic can call it without importing sessionRef
   const send = useCallback((data: string) => {
     const ws = sessionRef.current;
     if (ws?.readyState === WebSocket.OPEN && hasReceivedSetupCompleteRef.current) {
@@ -51,7 +50,10 @@ export function useGeminiSession(
 
   const playAudioChunk = useCallback((base64Audio: string) => {
     if (!playbackContextRef.current) {
-      playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
+      playbackContextRef.current = new AudioContext({
+        sampleRate: 24000,
+        latencyHint: "interactive",
+      });
     }
     const ctx = playbackContextRef.current;
     const binary = atob(base64Audio);
@@ -59,29 +61,35 @@ export function useGeminiSession(
     for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
     const float32 = new Float32Array(array.length / 2);
     const view = new DataView(array.buffer);
-    for (let i = 0; i < float32.length; i++) float32[i] = view.getInt16(i * 2, true) / 32768;
+    for (let i = 0; i < float32.length; i++)
+      float32[i] = view.getInt16(i * 2, true) / 32768;
     const buf = ctx.createBuffer(1, float32.length, 24000);
     buf.getChannelData(0).set(float32);
     const source = ctx.createBufferSource();
     source.buffer = buf;
     source.connect(ctx.destination);
-    if (nextPlayTimeRef.current < ctx.currentTime) nextPlayTimeRef.current = ctx.currentTime;
+    if (nextPlayTimeRef.current < ctx.currentTime)
+      nextPlayTimeRef.current = ctx.currentTime;
     source.start(nextPlayTimeRef.current);
     nextPlayTimeRef.current += buf.duration;
     scheduledNodesRef.current.push(source);
     source.onended = () => {
-      scheduledNodesRef.current = scheduledNodesRef.current.filter(n => n !== source);
+      scheduledNodesRef.current = scheduledNodesRef.current.filter(
+        (n) => n !== source
+      );
     };
   }, []);
 
-  const handleAudioOutput = useCallback((base64Audio: string) => {
-    // Enforce strict turn-taking: do not play AI audio while the user is speaking.
-    if (isUserSpeakingRef.current) {
-      bufferedAiAudioRef.current.push(base64Audio);
-      return;
-    }
-    playAudioChunk(base64Audio);
-  }, [isUserSpeakingRef, playAudioChunk]);
+  const handleAudioOutput = useCallback(
+    (base64Audio: string) => {
+      if (isUserSpeakingRef.current) {
+        bufferedAiAudioRef.current.push(base64Audio);
+        return;
+      }
+      playAudioChunk(base64Audio);
+    },
+    [isUserSpeakingRef, playAudioChunk]
+  );
 
   const flushBufferedAiAudio = useCallback(() => {
     if (isUserSpeakingRef.current) return;
@@ -92,18 +100,35 @@ export function useGeminiSession(
   }, [isUserSpeakingRef, playAudioChunk]);
 
   const flushPendingTranscripts = useCallback(() => {
-    const user = pendingUserTranscriptRef.current ? normalizeTranscript(pendingUserTranscriptRef.current) : null;
-    if (user && !shouldIgnoreTranscript(user) && user !== lastSavedUserTranscriptRef.current) {
+    const user = pendingUserTranscriptRef.current
+      ? normalizeTranscript(pendingUserTranscriptRef.current)
+      : null;
+    if (
+      user &&
+      !shouldIgnoreTranscript(user) &&
+      user !== lastSavedUserTranscriptRef.current
+    ) {
       lastSavedUserTranscriptRef.current = user;
       onSaveMessage("user", user);
     }
   }, [onSaveMessage]);
 
   const interrupt = useCallback(() => {
-    scheduledNodesRef.current.forEach(n => { try { n.stop(); } catch {} });
+    scheduledNodesRef.current.forEach((n) => {
+      try {
+        n.stop();
+      } catch {}
+    });
     scheduledNodesRef.current = [];
     nextPlayTimeRef.current = 0;
-    send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [] }], turnComplete: true } }));
+    send(
+      JSON.stringify({
+        clientContent: {
+          turns: [{ role: "user", parts: [] }],
+          turnComplete: true,
+        },
+      })
+    );
     isModelSpeakingRef.current = false;
     setIsModelSpeaking(false);
   }, [send]);
@@ -119,153 +144,194 @@ export function useGeminiSession(
     setIsConnected(false);
   }, [interrupt, flushPendingTranscripts]);
 
-  const connect = useCallback(async (options?: { token?: string }) => {
-    setError(null);
-    hasSentSetupRef.current = false;
-    hasReceivedSetupCompleteRef.current = false;
+  const connect = useCallback(
+    async (options?: { token?: string }) => {
+      setError(null);
+      hasSentSetupRef.current = false;
+      hasReceivedSetupCompleteRef.current = false;
 
-    const token = options?.token ?? (await SessionService.getLiveToken(sessionId))?.data?.token;
-    if (!token) throw new Error("Missing auth token");
+      const token =
+        options?.token ??
+        (await SessionService.getLiveToken(sessionId))?.data?.token;
+      if (!token) throw new Error("Missing auth token");
 
-    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(token)}`;
-    const ws = new WebSocket(wsUrl);
-    sessionRef.current = ws;
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(token)}`;
+      const ws = new WebSocket(wsUrl);
+      sessionRef.current = ws;
+      ws.binaryType = "arraybuffer";
 
-    // fix: set binaryType immediately so onmessage is always synchronous
-    ws.binaryType = "arraybuffer";
+      const connectPromise = new Promise<void>((resolve, reject) => {
+        connectResolveRef.current = resolve;
+        connectRejectRef.current = reject;
+        connectTimeoutRef.current = window.setTimeout(
+          () => reject(new Error("Timed out")),
+          15000
+        );
+      });
 
-    const connectPromise = new Promise<void>((resolve, reject) => {
-      connectResolveRef.current = resolve;
-      connectRejectRef.current = reject;
-      connectTimeoutRef.current = window.setTimeout(() => reject(new Error("Timed out")), 15000);
-    });
-
-    ws.onopen = () => {
-      if (hasSentSetupRef.current) return;
-      hasSentSetupRef.current = true;
-      const handle = sessionHandleRef.current ?? getStoredSessionHandle(sessionId);
-      ws.send(JSON.stringify({
-        setup: {
-          ...(handle ? { sessionResumption: { handle } } : {}),
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-        },
-      }));
-    };
-
-    ws.onmessage = (event) => {
-      const text = typeof event.data === "string"
-        ? event.data
-        : new TextDecoder().decode(event.data);
-      const msg = JSON.parse(text);
-
-      if (msg.setupComplete !== undefined) {
-        hasReceivedSetupCompleteRef.current = true;
-        setIsConnected(true);
-        window.clearTimeout(connectTimeoutRef.current!);
-        connectResolveRef.current?.();
-        connectResolveRef.current = null;
-        connectRejectRef.current = null;
-
-        if (!hasSentKickoffRef.current) {
-          hasSentKickoffRef.current = true;
-          ws.send(JSON.stringify({
-            clientContent: {
-              turns: [{ role: "user", parts: [{ text: "Start the interview now." }] }],
-              turnComplete: true,
+      ws.onopen = () => {
+        if (hasSentSetupRef.current) return;
+        hasSentSetupRef.current = true;
+        const handle =
+          sessionHandleRef.current ?? getStoredSessionHandle(sessionId);
+        ws.send(
+          JSON.stringify({
+            setup: {
+              ...(handle ? { sessionResumption: { handle } } : {}),
+              inputAudioTranscription: {},
+              outputAudioTranscription: {},
             },
-          }));
-        }
-      }
+          })
+        );
+      };
 
-      if (msg.serverContent) {
-        const { serverContent } = msg;
-        if (serverContent.modelTurn) {
-          if (!isModelSpeakingRef.current) {
-            isModelSpeakingRef.current = true;
-            setIsModelSpeaking(true);
-            callbacks?.onAiStartedResponding?.();
+      ws.onmessage = (event) => {
+        const text =
+          typeof event.data === "string"
+            ? event.data
+            : new TextDecoder().decode(event.data);
+        const msg = JSON.parse(text);
+
+        if (msg.setupComplete !== undefined) {
+          hasReceivedSetupCompleteRef.current = true;
+          setIsConnected(true);
+          window.clearTimeout(connectTimeoutRef.current!);
+          connectResolveRef.current?.();
+          connectResolveRef.current = null;
+          connectRejectRef.current = null;
+
+          if (!hasSentKickoffRef.current) {
+            hasSentKickoffRef.current = true;
+            ws.send(
+              JSON.stringify({
+                clientContent: {
+                  turns: [
+                    {
+                      role: "user",
+                      parts: [{ text: "Start the interview now." }],
+                    },
+                  ],
+                  turnComplete: true,
+                },
+              })
+            );
           }
-          serverContent.modelTurn.parts?.forEach((p: any) => {
-            if (p.inlineData?.data) handleAudioOutput(p.inlineData.data);
-          });
         }
-        if (serverContent.turnComplete) {
-          isModelSpeakingRef.current = false;
-          setIsModelSpeaking(false);
-          callbacks?.onAiFinishedSpeaking?.();
-          if (scheduledNodesRef.current.length === 0) nextPlayTimeRef.current = 0;
 
-          // Always flush the user's transcript BEFORE the assistant's response
-          // to maintain correct chronological order in the chat history.
-          const userRaw = pendingUserTranscriptRef.current;
-          if (userRaw) {
-            const userT = normalizeTranscript(userRaw);
-            if (userT && !shouldIgnoreTranscript(userRaw) && userT !== lastSavedUserTranscriptRef.current) {
-              lastSavedUserTranscriptRef.current = userT;
-              onSaveMessage("user", userT);
+        if (msg.serverContent) {
+          const { serverContent } = msg;
+
+          if (serverContent.modelTurn) {
+            if (!isModelSpeakingRef.current) {
+              isModelSpeakingRef.current = true;
+              setIsModelSpeaking(true);
+              callbacks?.onAiStartedResponding?.();
             }
-            pendingUserTranscriptRef.current = null;
+            serverContent.modelTurn.parts?.forEach((p: any) => {
+              if (p.inlineData?.data) handleAudioOutput(p.inlineData.data);
+            });
           }
 
-          const t = pendingAssistantTranscriptRef.current ? normalizeTranscript(pendingAssistantTranscriptRef.current) : null;
-          if (t && !shouldIgnoreTranscript(t) && t !== lastSavedAssistantTranscriptRef.current) {
-            lastSavedAssistantTranscriptRef.current = t;
-            onSaveMessage("assistant", t);
+          if (serverContent.turnComplete) {
+            isModelSpeakingRef.current = false;
+            setIsModelSpeaking(false);
+            callbacks?.onAiFinishedSpeaking?.();
+            if (scheduledNodesRef.current.length === 0)
+              nextPlayTimeRef.current = 0;
+
+            // Flush user transcript first to preserve chronological order
+            const userRaw = pendingUserTranscriptRef.current;
+            if (userRaw) {
+              const userT = normalizeTranscript(userRaw);
+              if (
+                userT &&
+                !shouldIgnoreTranscript(userRaw) &&
+                userT !== lastSavedUserTranscriptRef.current
+              ) {
+                lastSavedUserTranscriptRef.current = userT;
+                onSaveMessage("user", userT);
+              }
+              pendingUserTranscriptRef.current = null;
+            }
+
+            const t = pendingAssistantTranscriptRef.current
+              ? normalizeTranscript(pendingAssistantTranscriptRef.current)
+              : null;
+            if (
+              t &&
+              !shouldIgnoreTranscript(t) &&
+              t !== lastSavedAssistantTranscriptRef.current
+            ) {
+              lastSavedAssistantTranscriptRef.current = t;
+              onSaveMessage("assistant", t);
+            }
+            pendingAssistantTranscriptRef.current = null;
+            lastAssistantTranscriptUpdateAtRef.current = 0;
           }
-          pendingAssistantTranscriptRef.current = null;
-          lastAssistantTranscriptUpdateAtRef.current = 0;
-        }
-        if (serverContent.outputTranscription?.text) {
-          const t = serverContent.outputTranscription.text;
-          if (!shouldIgnoreTranscript(t)) {
-            pendingAssistantTranscriptRef.current = mergeTranscript(pendingAssistantTranscriptRef.current, t);
-            lastAssistantTranscriptUpdateAtRef.current = Date.now();
+
+          if (serverContent.outputTranscription?.text) {
+            const t = serverContent.outputTranscription.text;
+            if (!shouldIgnoreTranscript(t)) {
+              pendingAssistantTranscriptRef.current = mergeTranscript(
+                pendingAssistantTranscriptRef.current,
+                t
+              );
+              lastAssistantTranscriptUpdateAtRef.current = Date.now();
+            }
+          }
+
+          if (serverContent.inputTranscription?.text) {
+            const t = serverContent.inputTranscription.text;
+            if (!shouldIgnoreTranscript(t)) {
+              pendingUserTranscriptRef.current = mergeTranscript(
+                pendingUserTranscriptRef.current,
+                t
+              );
+              callbacks?.onInputTranscriptionUpdate?.();
+            }
           }
         }
-        if (serverContent.inputTranscription?.text) {
-          const t = serverContent.inputTranscription.text;
-          if (!shouldIgnoreTranscript(t)) {
-            pendingUserTranscriptRef.current = mergeTranscript(pendingUserTranscriptRef.current, t);
-            lastUserTranscriptUpdateAtRef.current = Date.now();
+
+        if (msg.sessionResumptionUpdate) {
+          const handle =
+            msg.sessionResumptionUpdate?.newHandle ??
+            msg.sessionResumptionUpdate?.handle;
+          if (typeof handle === "string" && handle.trim()) {
+            sessionHandleRef.current = handle;
+            storeSessionHandle(sessionId, handle);
           }
         }
-      }
 
-      if (msg.sessionResumptionUpdate) {
-        const handle = msg.sessionResumptionUpdate?.newHandle ?? msg.sessionResumptionUpdate?.handle;
-        if (typeof handle === "string" && handle.trim()) {
-          sessionHandleRef.current = handle;
-          storeSessionHandle(sessionId, handle);
+        if (msg.goAway) {
+          disconnect();
+          setTimeout(() => connect(), 2000); // no options → fresh token fetched inside connect()
         }
-      }
 
-      if (msg.goAway) {
-        disconnect();
-        setTimeout(() => connect(options), 2000);
-      }
+        if (msg.usageMetadata) callbacks?.onTokenUsage?.();
+      };
 
-      if (msg.usageMetadata) callbacks?.onTokenUsage?.();
-    };
-
-    ws.onerror = () => {
-      setError("WebSocket error");
-      connectRejectRef.current?.(new Error("WebSocket error"));
-      connectResolveRef.current = null;
-      connectRejectRef.current = null;
-    };
-
-    ws.onclose = (event) => {
-      setIsConnected(false);
-      if (!hasReceivedSetupCompleteRef.current) {
-        connectRejectRef.current?.(new Error(`Closed before setupComplete (code=${event.code})`));
+      ws.onerror = () => {
+        setError("WebSocket error");
+        connectRejectRef.current?.(new Error("WebSocket error"));
         connectResolveRef.current = null;
         connectRejectRef.current = null;
-      }
-    };
+      };
 
-    return connectPromise;
-  }, [sessionId, handleAudioOutput, disconnect, onSaveMessage, callbacks]);
+      ws.onclose = (event) => {
+        setIsConnected(false);
+        if (!hasReceivedSetupCompleteRef.current) {
+          connectRejectRef.current?.(
+            new Error(`Closed before setupComplete (code=${event.code})`)
+          );
+          connectResolveRef.current = null;
+          connectRejectRef.current = null;
+        }
+      };
+
+      return connectPromise;
+    },
+    [sessionId, handleAudioOutput, disconnect, onSaveMessage, callbacks]
+  );
 
   return {
     connect,
@@ -273,10 +339,10 @@ export function useGeminiSession(
     interrupt,
     flushPendingTranscripts,
     flushBufferedAiAudio,
-    send,                      // consumed by useGeminiMic
-    isModelSpeakingRef,        // consumed by useGeminiMic (ref, not state — avoids closure stale)
-    pendingUserTranscriptRef,  // consumed by useGeminiMic
-    lastSavedUserTranscriptRef,// consumed by useGeminiMic
+    send,
+    isModelSpeakingRef,
+    pendingUserTranscriptRef,
+    lastSavedUserTranscriptRef,
     isConnected,
     isModelSpeaking,
     error,

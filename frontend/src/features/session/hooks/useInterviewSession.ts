@@ -16,12 +16,11 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
   const { saveMessage, endSession, isEnded, sessionJoined } = useSocket(sessionId);
   const [micStartedAtMs, setMicStartedAtMs] = useState<number | null>(null);
 
-  
   const onSaveMessage = useCallback(
     (role: "user" | "assistant", content: string) => saveMessage(role, content),
     [saveMessage]
   );
-  
+
   const {
     connect,
     disconnect,
@@ -40,10 +39,9 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
     onAiFinishedSpeaking: simulation.onAiFinishedSpeaking,
   });
 
-  
   useEffect(() => {
     if (!session) return;
-    
+
     let cancelled = false;
 
     const initializeConnection = async () => {
@@ -61,7 +59,7 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
 
       simulation.setStage("fetching_token");
       simulation.setLoadingStep("fetching_token", false);
-      
+
       try {
         const res = await SessionService.getLiveToken(sessionId);
         const token = res?.data?.token;
@@ -69,9 +67,9 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
 
         simulation.setStage("connecting_gemini");
         simulation.setLoadingStep("connecting_gemini", false);
-        
+
         await connect({ token });
-        
+
         if (!cancelled) {
           simulation.setLoadingStep("connecting_gemini", true);
           simulation.setStage("ready");
@@ -85,13 +83,12 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
     initializeConnection();
     return () => {
       cancelled = true;
-      // Ensure mic + socket are always torn down on unmount/session change.
       isEndingRef.current = true;
       stopMic();
       disconnect();
     };
   }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
-  
+
   useEffect(() => {
     if (isEndingRef.current) return;
     if (sessionJoined && isConnected && !isMicActive) {
@@ -100,50 +97,46 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
           await startMic();
           setMicStartedAtMs((prev) => prev ?? Date.now());
         } catch (e) {
-          // console.error(e);
+          console.error(e);
         }
       })();
     }
   }, [sessionJoined, isConnected, isMicActive, startMic]);
 
-  
   const handleEndInterview = useCallback(async () => {
     isEndingRef.current = true;
     interrupt();
     stopMic();
     flushPendingTranscripts();
     endSession();
-    
+
     try {
       await SessionService.endSession(sessionId);
-    } catch {
-    }
-    
+    } catch {}
+
     disconnect();
-    
-    const redirectUrl = session?.jobId 
+
+    const redirectUrl = session?.jobId
       ? `/jobs/${session.jobId}?feedbackSessionId=${sessionId}`
       : "/jobs";
-    
+
     router.replace(redirectUrl);
   }, [interrupt, stopMic, flushPendingTranscripts, endSession, disconnect, router, session, sessionId]);
 
-  
   useEffect(() => {
     if (!isEnded) return;
 
     isEndingRef.current = true;
     stopMic();
     disconnect();
-    
-    const redirectUrl = session?.jobId 
+
+    const redirectUrl = session?.jobId
       ? `/jobs/${session.jobId}?feedbackSessionId=${sessionId}`
       : "/jobs";
-    
+
     router.replace(redirectUrl);
   }, [isEnded, stopMic, disconnect, router, session, sessionId]);
 
-  
   useEffect(() => {
     if (autoEndTimerRef.current) {
       window.clearTimeout(autoEndTimerRef.current);

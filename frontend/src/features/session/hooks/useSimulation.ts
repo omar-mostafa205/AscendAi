@@ -21,7 +21,7 @@ export const useSimulation = () => {
 
   const addMetric = useCallback((msg: string) => {
     setMetrics(prev => [...prev, `${new Date().toISOString().split('T')[1].substring(0,8)} - ${msg}`]);
-    // console.log(`[Simulation] ${msg}`);
+    console.log(`[Simulation] ${msg}`);
   }, []);
 
   const setLoadingStep = useCallback((key: LoadingStepKey, completed: boolean) => {
@@ -29,7 +29,7 @@ export const useSimulation = () => {
       const updated = prev.map(s => s.key === key ? { ...s, completed } : s);
       const step = updated.find(s => s.key === key);
       if (step) {
-        // console.log(`🎬 Updating loading progress: ${step.label} - ${step.progress}% - ${step.description} - Completed: ${completed}`);
+        console.log(`🎬 Updating loading progress: ${step.label} - ${step.progress}% - ${step.description} - Completed: ${completed}`);
       }
       return updated;
     });
