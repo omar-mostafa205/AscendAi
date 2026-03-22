@@ -15,5 +15,7 @@ export default async function JobSessionsPage({
     );
   if (!isUuid) redirect("/jobs");
 
-  return <JobSessionsClient id={id} />;
+  return (
+    <JobSessionsClient id={id} />
+  );
 }
