@@ -6,6 +6,7 @@ import { getStoredSessionHandle, storeSessionHandle } from "../utils";
 export function useGeminiSession(
   sessionId: string,
   onSaveMessage: (role: "user" | "assistant", content: string) => void,
+  isUserSpeakingRef: React.MutableRefObject<boolean>,
   callbacks?: {
     onAiStartedResponding?: () => void;
     onAiFinishedSpeaking?: () => void;
@@ -38,6 +39,7 @@ export function useGeminiSession(
   const playbackContextRef = useRef<AudioContext | null>(null);
   const scheduledNodesRef = useRef<AudioBufferSourceNode[]>([]);
   const nextPlayTimeRef = useRef<number>(0);
+  const bufferedAiAudioRef = useRef<string[]>([]);
 
   // expose send so useGeminiMic can call it without importing sessionRef
   const send = useCallback((data: string) => {
@@ -47,7 +49,7 @@ export function useGeminiSession(
     }
   }, []);
 
-  const handleAudioOutput = useCallback((base64Audio: string) => {
+  const playAudioChunk = useCallback((base64Audio: string) => {
     if (!playbackContextRef.current) {
       playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
     }
@@ -72,16 +74,28 @@ export function useGeminiSession(
     };
   }, []);
 
+  const handleAudioOutput = useCallback((base64Audio: string) => {
+    // Enforce strict turn-taking: do not play AI audio while the user is speaking.
+    if (isUserSpeakingRef.current) {
+      bufferedAiAudioRef.current.push(base64Audio);
+      return;
+    }
+    playAudioChunk(base64Audio);
+  }, [isUserSpeakingRef, playAudioChunk]);
+
+  const flushBufferedAiAudio = useCallback(() => {
+    if (isUserSpeakingRef.current) return;
+    const queued = bufferedAiAudioRef.current;
+    if (!queued || queued.length === 0) return;
+    bufferedAiAudioRef.current = [];
+    for (const chunk of queued) playAudioChunk(chunk);
+  }, [isUserSpeakingRef, playAudioChunk]);
+
   const flushPendingTranscripts = useCallback(() => {
     const user = pendingUserTranscriptRef.current ? normalizeTranscript(pendingUserTranscriptRef.current) : null;
     if (user && !shouldIgnoreTranscript(user) && user !== lastSavedUserTranscriptRef.current) {
       lastSavedUserTranscriptRef.current = user;
       onSaveMessage("user", user);
-    }
-    const assistant = pendingAssistantTranscriptRef.current ? normalizeTranscript(pendingAssistantTranscriptRef.current) : null;
-    if (assistant && !shouldIgnoreTranscript(assistant) && assistant !== lastSavedAssistantTranscriptRef.current) {
-      lastSavedAssistantTranscriptRef.current = assistant;
-      onSaveMessage("assistant", assistant);
     }
   }, [onSaveMessage]);
 
@@ -99,6 +113,7 @@ export function useGeminiSession(
     interrupt();
     playbackContextRef.current?.close().catch(() => {});
     playbackContextRef.current = null;
+    bufferedAiAudioRef.current = [];
     sessionRef.current?.close();
     sessionRef.current = null;
     setIsConnected(false);
@@ -180,6 +195,19 @@ export function useGeminiSession(
           setIsModelSpeaking(false);
           callbacks?.onAiFinishedSpeaking?.();
           if (scheduledNodesRef.current.length === 0) nextPlayTimeRef.current = 0;
+
+          // Always flush the user's transcript BEFORE the assistant's response
+          // to maintain correct chronological order in the chat history.
+          const userRaw = pendingUserTranscriptRef.current;
+          if (userRaw) {
+            const userT = normalizeTranscript(userRaw);
+            if (userT && !shouldIgnoreTranscript(userRaw) && userT !== lastSavedUserTranscriptRef.current) {
+              lastSavedUserTranscriptRef.current = userT;
+              onSaveMessage("user", userT);
+            }
+            pendingUserTranscriptRef.current = null;
+          }
+
           const t = pendingAssistantTranscriptRef.current ? normalizeTranscript(pendingAssistantTranscriptRef.current) : null;
           if (t && !shouldIgnoreTranscript(t) && t !== lastSavedAssistantTranscriptRef.current) {
             lastSavedAssistantTranscriptRef.current = t;
@@ -244,8 +272,11 @@ export function useGeminiSession(
     disconnect,
     interrupt,
     flushPendingTranscripts,
+    flushBufferedAiAudio,
     send,                      // consumed by useGeminiMic
     isModelSpeakingRef,        // consumed by useGeminiMic (ref, not state — avoids closure stale)
+    pendingUserTranscriptRef,  // consumed by useGeminiMic
+    lastSavedUserTranscriptRef,// consumed by useGeminiMic
     isConnected,
     isModelSpeaking,
     error,

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useGeminiSession } from "./useGeminiSession";
 import { useGeminiMic } from "./useGeminiMic";
 
@@ -12,22 +13,36 @@ export const useGeminiLive = (
     onTokenUsage?: () => void;
   }
 ) => {
-  const session = useGeminiSession(sessionId, onSaveMessage, {
+  const isUserSpeakingRef = useRef(false);
+
+  const session = useGeminiSession(sessionId, onSaveMessage, isUserSpeakingRef, {
     onAiStartedResponding: callbacks?.onAiStartedResponding,
     onAiFinishedSpeaking: callbacks?.onAiFinishedSpeaking,
     onTokenUsage: callbacks?.onTokenUsage,
   });
 
-  const mic = useGeminiMic(session.send, session.isModelSpeakingRef, onSaveMessage, {
-    onUserStartedSpeaking: callbacks?.onUserStartedSpeaking,
-    onUserStoppedSpeaking: callbacks?.onUserStoppedSpeaking,
-  });
+  const mic = useGeminiMic(
+    session.send,
+    session.isModelSpeakingRef,
+    isUserSpeakingRef,
+    onSaveMessage,
+    session.pendingUserTranscriptRef,
+    session.lastSavedUserTranscriptRef,
+    {
+      onUserStartedSpeaking: callbacks?.onUserStartedSpeaking,
+      onUserStoppedSpeaking: () => {
+        callbacks?.onUserStoppedSpeaking?.();
+        session.flushBufferedAiAudio();
+      },
+    }
+  );
 
   return {
     connect: session.connect,
     disconnect: session.disconnect,
     interrupt: session.interrupt,
     flushPendingTranscripts: session.flushPendingTranscripts,
+    flushBufferedAiAudio: session.flushBufferedAiAudio,
     startMic: mic.startMic,
     stopMic: mic.stopMic,
     isConnected: session.isConnected,

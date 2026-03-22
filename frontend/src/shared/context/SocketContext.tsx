@@ -21,7 +21,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false
     let current: Socket | null = null
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8000"
+    const rawSocketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8001"
+    // socket.io-client expects an http(s) base URL; it upgrades to ws/wss automatically.
+    const socketUrl = rawSocketUrl
+      .replace(/^wss:\/\//i, "https://")
+      .replace(/^ws:\/\//i, "http://")
 
     const connect = async (accessToken: string) => {
       if (cancelled) return

@@ -38,34 +38,45 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
   const flushPendingMessages = async (sessionId: string) => {
     const pending = pendingMessagesBySessionId.get(sessionId)
     if (!pending || pending.length === 0) return
-  
+
     pendingMessagesBySessionId.delete(sessionId)
-  
+
     const t = flushTimersBySessionId.get(sessionId)
     if (t) {
       clearTimeout(t)
       flushTimersBySessionId.delete(sessionId)
     }
-  
+
     try {
       const session = await prisma.interviewSession.findFirst({
         where: { id: sessionId, userId },
         select: { id: true, status: true, messages: true },
       })
-  
+
       if (!session) {
         logger.warn("flushPendingMessages: session not found", { sessionId, userId })
         return
       }
-  
+
       const existingUnknown: unknown = session.messages
       const existing: SessionMessage[] = Array.isArray(existingUnknown)
         ? (existingUnknown as SessionMessage[])
         : []
-  
+
       const merged: SessionMessage[] = [...existing]
-  
+
       for (const m of pending) {
+        const lastIdx = merged.length - 1
+        const lastMsg = lastIdx >= 0 ? merged[lastIdx] : null
+
+        // If the new message is a continuation of the last one (same role & prefix), replace it.
+        if (lastMsg && lastMsg.role === m.role && m.content.startsWith(lastMsg.content)) {
+          merged[lastIdx] = m
+          continue
+        }
+
+        // Otherwise, skip if it's an exact duplicate of ANY previous message (to be safe),
+        // but typically we only care about the last one.
         const isDuplicate = merged.some(
           (msg) => msg.role === m.role && msg.content === m.content
         )
@@ -73,19 +84,19 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
           merged.push(m)
         }
       }
-  
+
       await prisma.interviewSession.update({
         where: { id: sessionId },
-        data: { 
-          messages: merged 
+        data: {
+          messages: merged
         },
       })
-  
-      logger.debug("Messages flushed to session.messages", { 
-        sessionId, 
-        userId, 
+
+      logger.debug("Messages flushed to session.messages", {
+        sessionId,
+        userId,
         totalMessages: merged.length,
-        added: merged.length - existing.length 
+        added: merged.length - existing.length
       })
     } catch (error) {
       Sentry.captureException(error)
@@ -112,7 +123,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
 
   socket.on("join_session", async (payload: JoinPayload) => {
     const sessionId = typeof payload === "string" ? payload : payload?.sessionId
-    
+
     if (!sessionId) {
       socket.emit("error", { message: "Missing sessionId" })
       return
@@ -144,7 +155,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
 
       const sessionUserKey = `${sessionId}:${userId}`
       const existingSocketId = activeSocketIdBySessionUserKey.get(sessionUserKey)
-      
+
       if (existingSocketId && existingSocketId !== socket.id) {
         const oldSocket = io.sockets.sockets.get(existingSocketId)
         if (oldSocket) {
@@ -152,18 +163,18 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
           oldSocket.disconnect(true)
         }
       }
-      
+
       activeSocketIdBySessionUserKey.set(sessionUserKey, socket.id)
 
       socket.join(sessionId)
       joinedSessionIds.add(sessionId)
-      
-      logger.info("User joined session", { 
-        service: "AscendAI", 
-        sessionId, 
-        userId 
+
+      logger.info("User joined session", {
+        service: "AscendAI",
+        sessionId,
+        userId
       })
-      
+
       socket.emit("session_joined", { sessionId })
     } catch (error) {
       Sentry.captureException(error)
@@ -174,14 +185,14 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
 
   socket.on("save_message", async (payload: SaveMessagePayload) => {
     const { sessionId, role, content } = payload || {}
-    
+
     if (!sessionId || !role || !content?.trim()) {
       logger.debug("save_message: ignored empty payload", { sessionId, userId, role })
       return
     }
 
     const trimmedContent = content.trim()
-    
+
     if (trimmedContent.length > 8000) {
       logger.warn("Message too long", { sessionId, userId, length: trimmedContent.length })
       return
@@ -221,9 +232,9 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
 
       await prisma.interviewSession.updateMany({
         where: { id: sessionId, userId },
-        data: { 
-          status: "processing", 
-          endedAt: new Date() 
+        data: {
+          status: "processing",
+          endedAt: new Date()
         },
       })
       await flushPendingMessages(sessionId)
@@ -244,10 +255,10 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         activeSocketIdBySessionUserKey.delete(sessionUserKey)
       }
 
-      logger.info("Session ended, feedback job enqueued", { 
-        service: "AscendAI", 
-        sessionId, 
-        userId 
+      logger.info("Session ended, feedback job enqueued", {
+        service: "AscendAI",
+        sessionId,
+        userId
       })
     } catch (error) {
       Sentry.captureException(error)
@@ -261,17 +272,17 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
 
     socket.leave(sessionId)
     joinedSessionIds.delete(sessionId)
-    
+
     const sessionUserKey = `${sessionId}:${userId}`
     if (activeSocketIdBySessionUserKey.get(sessionUserKey) === socket.id) {
       activeSocketIdBySessionUserKey.delete(sessionUserKey)
     }
-    
-    logger.info("User left session", { 
-      service: "AscendAI", 
-      sessionId, 
-      socketId: socket.id, 
-      userId 
+
+    logger.info("User left session", {
+      service: "AscendAI",
+      sessionId,
+      socketId: socket.id,
+      userId
     })
   })
 
@@ -280,13 +291,13 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
 
     for (const sessionId of joinedSessionIds) {
       const sessionUserKey = `${sessionId}:${userId}`
-      
+
       if (activeSocketIdBySessionUserKey.get(sessionUserKey) === socket.id) {
         activeSocketIdBySessionUserKey.delete(sessionUserKey)
       }
 
       clearDisconnectTimer(sessionId)
-      
+
       const timer = setTimeout(async () => {
         try {
           const roomSize = io.sockets.adapter.rooms.get(sessionId)?.size ?? 0
@@ -301,7 +312,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
           })
 
           if (!session) return
-          
+
           if (session.status !== "in_progress" && session.status !== "active") {
             logger.debug("Session not active, skipping auto-end", { sessionId, status: session.status })
             return
@@ -323,37 +334,37 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
 
           await prisma.interviewSession.updateMany({
             where: { id: sessionId, userId },
-            data: { 
-              status: "processing", 
-              endedAt: new Date() 
+            data: {
+              status: "processing",
+              endedAt: new Date()
             },
           })
 
           try {
             await analysisQueue.add("analyze_session", { sessionId })
           } catch (queueError) {
-            logger.error("Failed to enqueue analysis on disconnect", { 
-              sessionId, 
-              userId, 
-              error: queueError 
+            logger.error("Failed to enqueue analysis on disconnect", {
+              sessionId,
+              userId,
+              error: queueError
             })
           }
 
           io.to(sessionId).emit("session_ended", { sessionId })
-          
-          logger.info("Session ended on disconnect", { 
-            service: "AscendAI", 
-            sessionId, 
-            userId, 
-            reason 
+
+          logger.info("Session ended on disconnect", {
+            service: "AscendAI",
+            sessionId,
+            userId,
+            reason
           })
         } catch (error) {
           Sentry.captureException(error)
-          logger.error("Failed to end session on disconnect", { 
-            sessionId, 
-            userId, 
-            reason, 
-            error 
+          logger.error("Failed to end session on disconnect", {
+            sessionId,
+            userId,
+            reason,
+            error
           })
         } finally {
           disconnectTimersBySessionId.delete(sessionId)

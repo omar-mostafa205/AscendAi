@@ -10,12 +10,16 @@ class GeminiAudioProcessor extends AudioWorkletProcessor {
     this.lastVoiceAt = 0;
     this.isUserSpeaking = false;
     this.speakingStartedAt = 0;
+    this.voiceFrames = 0;
 
     // Configuration (matches your AUDIO_CONFIG)
-    this.SPEECH_ON_THRESHOLD = 0.012;
-    this.SPEECH_OFF_THRESHOLD = 0.007;
-    this.SILENCE_DURATION_MS = 450;
+    this.SPEECH_ON_THRESHOLD = 0.02;
+    this.SPEECH_OFF_THRESHOLD = 0.012;
+    this.SILENCE_DURATION_MS = 900;
     this.MAX_SPEECH_MS = 15000;
+    // Require a few consecutive frames over the threshold before starting speech.
+    // Reduces false positives from keyboard/mic noise.
+    this.VOICE_FRAMES_REQUIRED = 3;
 
     // Chunking: avoid posting/sending every render quantum
     // 640 samples @ 16kHz ≈ 40ms per chunk (good latency/overhead balance)
@@ -74,12 +78,17 @@ class GeminiAudioProcessor extends AudioWorkletProcessor {
     // ────────────────────────────────────────────────────────────────
     if (amplitude >= this.SPEECH_ON_THRESHOLD) {
       this.lastVoiceAt = now;
+      this.voiceFrames = Math.min(this.VOICE_FRAMES_REQUIRED, this.voiceFrames + 1);
 
       if (!this.isUserSpeaking) {
-        this.isUserSpeaking = true;
-        this.speakingStartedAt = now;
-        this.port.postMessage({ type: "vad", vadEvent: "started", timestamp: now });
+        if (this.voiceFrames >= this.VOICE_FRAMES_REQUIRED) {
+          this.isUserSpeaking = true;
+          this.speakingStartedAt = now;
+          this.port.postMessage({ type: "vad", vadEvent: "started", timestamp: now });
+        }
       }
+    } else {
+      this.voiceFrames = 0;
     }
 
     // ────────────────────────────────────────────────────────────────
