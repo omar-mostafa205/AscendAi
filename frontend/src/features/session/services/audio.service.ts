@@ -26,7 +26,7 @@ export class GeminiAudioService {
       this.playbackContext = new (
         window.AudioContext || (window as any).webkitAudioContext
       )({ sampleRate: AUDIO_CONFIG.OUTPUT_SAMPLE_RATE });
-      console.log("Audio playback context initialized (24kHz output)");
+      // console.log("Audio playback context initialized (24kHz output)");
     }
   }
 
@@ -81,7 +81,7 @@ export class GeminiAudioService {
         this.scheduledNodes = this.scheduledNodes.filter((n) => n !== source);
       };
     } catch (error) {
-      console.error("Failed to play audio:", error);
+      // console.error("Failed to play audio:", error);
     }
   }
 
@@ -93,7 +93,7 @@ export class GeminiAudioService {
       try {
         node.stop();
       } catch (error) {
-        console.warn("Failed to stop audio node:", error);
+        // console.warn("Failed to stop audio node:", error);
       }
     });
 

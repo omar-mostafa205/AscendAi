@@ -100,7 +100,7 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
           await startMic();
           setMicStartedAtMs((prev) => prev ?? Date.now());
         } catch (e) {
-          console.error(e);
+          // console.error(e);
         }
       })();
     }

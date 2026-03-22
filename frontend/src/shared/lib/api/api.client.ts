@@ -29,7 +29,7 @@ export const ApiClient = {
         const res = await axiosInstance.get<T>(`${endPoint}`);
         return res.data;
     } catch (error) {
-        console.error('Error in GET request:', error);
+        // console.error('Error in GET request:', error);
         handleError(error);
         throw error as any
         
@@ -41,7 +41,7 @@ async post<T , U = unknown>(endPoint: string, data: U): Promise<T>{
         const res = await axiosInstance.post<T>(`${endPoint}`, data);
         return res.data;
     } catch (error) {
-        console.error('Error in POST request:', error);
+        // console.error('Error in POST request:', error);
         handleError(error);
         throw error as any
     }

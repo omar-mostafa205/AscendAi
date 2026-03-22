@@ -51,7 +51,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       })
 
       current.on("connect_error", (error) => {
-        console.error("Socket connection error", error)
+        // console.error("Socket connection error", error)
         toast.error("Connection error. Retrying...")
       })
 
