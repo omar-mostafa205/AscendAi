@@ -42,9 +42,9 @@ export function useJobSessions(jobId: string) {
       queryClient.invalidateQueries({ queryKey: ["sessions", jobId] })
       router.push(`/session/${response.data.session.id}`)
     },
-    onError: () => {
+    onError: (error) => {
       toast.error("Failed to start interview", {
-        description: "Please try again.",
+        description: error instanceof Error ? "You have exceded the maximum number of interviews" : "Please try again.",
       })
     },
   })

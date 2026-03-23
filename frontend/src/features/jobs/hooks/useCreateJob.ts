@@ -12,7 +12,7 @@ export const useCreateJob = () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
       toast.success("Job created successfully")
     },
-    onError: () => {
+    onError: (error) => {
       toast.error("Failed to create job", {
         description: "Please try again.",
       })
