@@ -32,15 +32,15 @@ export function JobCard({ job }: JobCardProps) {
 
   return (
     <Card
-      className={`hover:shadow-lg transition-shadow ${CARD_STYLES.className}`}
+      className={`hover:shadow-lg flex flex-col transition-shadow ${CARD_STYLES.className}`}
       style={CARD_STYLES.style}
     >
       <CardHeader>
         <CardTitle className="text-xl text-[#1f1f1f]">{job.title}</CardTitle>
         <p className="text-[#676662]">{job.company}</p>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-3 mb-4">
+      <CardContent className="flex flex-col flex-1">
+            <div className="space-y-3 mb-4">
           <div className="flex items-center gap-2 text-sm text-[#676662]">
             <Briefcase className="w-4 h-4" />
             <span>{sessionCount} session{sessionCount !== 1 ? "s" : ""}</span>
@@ -58,7 +58,7 @@ export function JobCard({ job }: JobCardProps) {
         </div>
         <Button
           onClick={() => router.push(`/jobs/${job.id}`)}
-          className="w-full bg-[#1b1917] hover:bg-neutral-800 text-white"
+          className="w-full bg-[#1b1917] hover:bg-neutral-800 text-white mt-auto"
         >
           {sessionCount > 0 ? "Continue Practicing" : "Start Practicing"}
         </Button>
