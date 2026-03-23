@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSocket } from "./useSocket";
 import { useGeminiLive } from "./useGemini";
 import { useSimulation } from "./useSimulation";
@@ -10,6 +11,7 @@ import { InterviewSession, MAX_SESSION_DURATION_MS } from "../types/session.type
 
 export function useInterviewSession(sessionId: string, session: InterviewSession | null) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const autoEndTimerRef = useRef<number | null>(null);
   const isEndingRef = useRef(false);
   const simulation = useSimulation();
@@ -111,17 +113,20 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
     endSession();
 
     try {
+      if (session?.jobId) {
+        queryClient.invalidateQueries({ queryKey: ["sessions", session.jobId] });
+      }
       await SessionService.endSession(sessionId);
     } catch {}
 
     disconnect();
 
     const redirectUrl = session?.jobId
-      ? `/jobs/${session.jobId}?feedbackSessionId=${sessionId}`
+      ? `/jobs/${session.jobId}?sessionId=${sessionId}`
       : "/jobs";
 
     router.replace(redirectUrl);
-  }, [interrupt, stopMic, flushPendingTranscripts, endSession, disconnect, router, session, sessionId]);
+  }, [interrupt, stopMic, flushPendingTranscripts, endSession, disconnect, router, session, sessionId, queryClient]);
 
   useEffect(() => {
     if (!isEnded) return;
@@ -130,12 +135,16 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
     stopMic();
     disconnect();
 
+    if (session?.jobId) {
+      queryClient.invalidateQueries({ queryKey: ["sessions", session.jobId] });
+    }
+
     const redirectUrl = session?.jobId
-      ? `/jobs/${session.jobId}?feedbackSessionId=${sessionId}`
+      ? `/jobs/${session.jobId}?sessionId=${sessionId}`
       : "/jobs";
 
     router.replace(redirectUrl);
-  }, [isEnded, stopMic, disconnect, router, session, sessionId]);
+  }, [isEnded, stopMic, disconnect, router, session, sessionId, queryClient]);
 
   useEffect(() => {
     if (autoEndTimerRef.current) {

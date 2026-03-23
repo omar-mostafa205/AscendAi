@@ -30,8 +30,8 @@ export function useJobSessions(jobId: string) {
     queryFn: async () => (await SessionService.getSessions(jobId)).data,
     enabled: !!jobId,
     refetchInterval: (query) => {
-      const list = query.state.data as Session[] | undefined;
-      return Array.isArray(list) && list.some((s) => s.status === "processing") ? 2000 : false;
+      const list = query.state.data as Session[] ;
+      return Array.isArray(list) && list.some((s) => s.status === "processing" || s.status === "active" || s.status === "in_progress") ? 2000 : false;
     },
   })
 

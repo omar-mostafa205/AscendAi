@@ -1,5 +1,6 @@
 import { JobSessionsClient } from "@/features/jobs/components/JobSessions/JobSessionsClient";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 export default async function JobSessionsPage({
   params,
@@ -16,6 +17,8 @@ export default async function JobSessionsPage({
   if (!isUuid) redirect("/jobs");
 
   return (
+    <Suspense fallback={<div></div>}>
     <JobSessionsClient id={id} />
+    </Suspense>
   );
 }

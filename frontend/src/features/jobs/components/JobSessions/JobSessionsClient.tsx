@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
@@ -16,6 +16,8 @@ interface JobSessionsClientProps {
 
 export function JobSessionsClient({ id }: JobSessionsClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialSelectedSessionId = searchParams.get("sessionId");
 
   const {
     job,
@@ -38,7 +40,6 @@ export function JobSessionsClient({ id }: JobSessionsClientProps) {
       </div>
     );
   }
-
   if (error === "Job not found") {
     return (
       <div className="min-h-screen bg-[#f5f2ef] flex items-center justify-center">
@@ -102,7 +103,10 @@ export function JobSessionsClient({ id }: JobSessionsClientProps) {
           creating={creating}
         />
 
-        <PastSessionsGrid sessions={sessions ?? []} />
+        <PastSessionsGrid 
+          sessions={sessions ?? []} 
+          initialSelectedSessionId={initialSelectedSessionId}
+        />
       </div>
     </div>
   );
