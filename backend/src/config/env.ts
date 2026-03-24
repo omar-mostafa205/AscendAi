@@ -20,8 +20,8 @@ export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]),
   // Local dev defaults to 8001 (matches docs/tests); in production Railway injects `PORT`.
   PORT: z.coerce.number().default(8001),
-  // Comma-separated allowlist; can be empty to allow all (auth still protects the API).
-  FRONTEND_URL: z.string().optional().default(""),
+  // Comma-separated allowlist; required in production.
+  FRONTEND_URL: z.string().default(""),
   SENTRY_DSN: z.string().optional(),
 
   SUPABASE_URL: z.string(),
@@ -29,24 +29,32 @@ export const envSchema = z.object({
 
   DATABASE_URL: z.string(),
 
-  GEMINI_LIVE_MODEL: z.string().optional().default("gemini-2.0-flash-live-001"), 
+  GEMINI_LIVE_MODEL: z.string().optional().default("gemini-2.0-flash-live-001"),
   GEMINI_API_KEY: z.string(),
   GEMINI_MODEL: z.string().optional().default("gemini-2.5-flash"),
   GEMINI_API_VERSION: z.string().optional().default("v1beta"),
   REDIS_URL: z.string(),
+}).refine((data) => {
+  if (data.NODE_ENV === "production" && !data.FRONTEND_URL) {
+    return false
+  }
+  return true
+}, {
+  message: "FRONTEND_URL is required in production mode",
+  path: ["FRONTEND_URL"],
 })
 const validateEnv = () => {
-        const parsed = envSchema.safeParse(process.env)
-        if(!parsed.success) {
-           logger.error(parsed.error)
-           process.exit(1)  
-        }
-        return parsed.data
+  const parsed = envSchema.safeParse(process.env)
+  if (!parsed.success) {
+    console.error("❌ Invalid environment variables:", JSON.stringify(parsed.error.format(), null, 2))
+    process.exit(1)
+  }
+  return parsed.data
 }
 export const env = validateEnv()
 
 export const config = {
-isProduction: env.NODE_ENV === "production",
-isDevlopment: env.NODE_ENV === "development",
+  isProduction: env.NODE_ENV === "production",
+  isDevlopment: env.NODE_ENV === "development",
 
 };
