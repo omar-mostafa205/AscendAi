@@ -5,6 +5,7 @@ import { env } from "../../config/env"
 import { personaService } from "./persona.service"
 import { buildLiveInterviewPrompt } from "../../services/ai/prompts/live.prompt"
 import { analysisQueue } from "../../queues/session-analysis-queue"
+
 type ScenarioType = "technical" | "background" | "culture"
 
 async function createSession(
@@ -12,15 +13,18 @@ async function createSession(
   jobId: string,
   scenarioType: ScenarioType
 ) {
-  const job = await prisma.job.findFirst({
-    where: { id: jobId, userId },
-  })
+  const [job, sessionsCount] = await Promise.all([
+    prisma.job.findFirst({
+      where: { id: jobId, userId },
+    }),
+    prisma.interviewSession.count({ where: { userId } }),
+  ])
 
   if (!job) throw new Error(`Job not found: ${jobId}`)
-  const sessionsCount = await prisma.interviewSession.count({ where: { userId } })
-  if (sessionsCount >= 200) {
+  if (sessionsCount >= 2) {
     throw new Error("Session limit reached. Please contact support to increase your limit.")
   }
+
   const persona = await personaService.getOrCreatePersona(job, scenarioType)
 
   const session = await prisma.interviewSession.create({
@@ -36,9 +40,13 @@ async function createSession(
   return { session }
 }
 
-async function listSessions(jobId: string) {
+async function getSessions(jobId: string, userId: string) {
+  // single query with ownership check built in
   const sessions = await prisma.interviewSession.findMany({
-    where: { jobId },
+    where: {
+      jobId,
+      job: { userId },
+    },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -50,21 +58,19 @@ async function listSessions(jobId: string) {
     },
   })
 
+  // only check job existence if no sessions found, for proper 404
+  if (sessions.length === 0) {
+    const job = await prisma.job.findFirst({
+      where: { id: jobId, userId },
+      select: { id: true },
+    })
+    if (!job) throw new Error(`Job not found: ${jobId}`)
+  }
+
   return sessions.map((session) => ({
     ...session,
     score: session.overallScore,
   }))
-}
-
-async function getSessions(jobId: string, userId: string) {
-  const job = await prisma.job.findFirst({
-    where: { id: jobId, userId },
-    select: { id: true },
-  })
-
-  if (!job) throw new Error(`Job not found: ${jobId}`)
-
-  return listSessions(jobId)
 }
 
 async function getSession(sessionId: string, userId: string) {
@@ -184,17 +190,11 @@ async function getLiveToken(
           systemInstruction: systemPrompt,
           responseModalities: [Modality.AUDIO],
           sessionResumption: {},
-
-
-          inputAudioTranscription: {
-          },
-
+          inputAudioTranscription: {},
           outputAudioTranscription: {},
-
           realtimeInputConfig: {
             automaticActivityDetection: { disabled: true },
           },
-
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {

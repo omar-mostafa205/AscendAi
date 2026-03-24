@@ -34,12 +34,24 @@ const getJobs = async (userId: string) => {
       company: true,
       jobDescription: true,
       createdAt: true,
+      interviewSessions: {
+        select: {
+          id: true,
+          scenarioType: true,
+          status: true,
+          overallScore: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
     orderBy: { createdAt: "desc" },
   })
 
-  logger.info("Jobs fetched", { userId, count: jobs.length })
-  return jobs
+  return jobs.map(job => ({
+    ...job,
+    sessions: job.interviewSessions,
+  }))
 }
 
 const getJobById = async (jobId: string, userId: string) => {
