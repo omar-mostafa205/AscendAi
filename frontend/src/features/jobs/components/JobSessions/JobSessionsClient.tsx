@@ -103,8 +103,8 @@ export function JobSessionsClient({ id }: JobSessionsClientProps) {
           creating={creating}
         />
 
-        <PastSessionsGrid 
-          sessions={sessions ?? []} 
+        <PastSessionsGrid
+          sessions={sessions ?? []}
           initialSelectedSessionId={initialSelectedSessionId}
         />
       </div>

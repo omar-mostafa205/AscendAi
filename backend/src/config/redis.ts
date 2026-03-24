@@ -4,7 +4,6 @@ import logger from "./logger"
 
 export const redisQueue = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
-  // Make initial connect and reconnect a bit more resilient on flaky networks.
   connectTimeout: 15000,
   keepAlive: 30000,
   retryStrategy: (times: number) => {
@@ -12,7 +11,6 @@ export const redisQueue = new Redis(env.REDIS_URL, {
       logger.error("Redis connection failed after 10 retries")
       return null
     }
-    // Exponential-ish backoff with a small cap.
     return Math.min(200 + times * 250, 5000)
   },
 })
