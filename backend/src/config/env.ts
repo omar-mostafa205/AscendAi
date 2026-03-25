@@ -19,7 +19,7 @@ for (const p of envCandidates) {
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]),
   PORT: z.coerce.number().default(8001),
-  FRONTEND_URL: z.string().default(""),
+  FRONTEND_URL: z.string().default("http://localhost:3000"),
   SENTRY_DSN: z.string().optional(),
 
   SUPABASE_URL: z.string(),

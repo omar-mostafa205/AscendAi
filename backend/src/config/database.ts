@@ -1,35 +1,26 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import logger from './logger';
-import { env } from './env';
+import { env } from "./env"
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-const connectionString = env.DATABASE_URL;
+const connectionString = env.DATABASE_URL
 const adapter = new PrismaPg({ connectionString });
 
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
     adapter,
-    log: env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log:
+      env.NODE_ENV === 'development'
+        ? ['query', 'error', 'warn']
+        : ['error'],
   });
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
-
-// if (env.NODE_ENV === 'development') {
-//   prisma.$on<any>('query', (e) => {
-//     if ('query' in e) {
-//       logger.info(`Prisma query executed`, {
-//         query: e.query,
-//         params: e.params,
-//         durationMs: e.duration, 
-//       });
-//     }
-//   });
-// }
 
 export async function connectDb(): Promise<void> {
   try {
