@@ -14,7 +14,7 @@ const AUDIO_CONFIG = {
   LATE_UPDATE_GRACE_MS: 2500,
 } as const;
 
-export function useGeminiMic(
+export function useInterviewMic(
   send: (data: string) => void,
   isModelSpeakingRef: React.MutableRefObject<boolean>,
   isUserSpeakingSharedRef: React.MutableRefObject<boolean>,

@@ -1,8 +1,8 @@
 import { useRef } from "react";
-import { useGeminiSession } from "./useGeminiSession";
-import { useGeminiMic } from "./useGeminiMic";
+import { useGeminiConnection } from "./useGeminiConnection";
+import { useInterviewMic } from "./useInterviewMic";
 
-export const useGeminiLive = (
+export const useGeminiVoice = (
   sessionId: string,
   onSaveMessage: (role: "user" | "assistant", content: string) => void,
   callbacks?: {
@@ -15,13 +15,13 @@ export const useGeminiLive = (
 ) => {
   const isUserSpeakingRef = useRef(false);
 
-  const session = useGeminiSession(sessionId, onSaveMessage, isUserSpeakingRef, {
+  const session = useGeminiConnection(sessionId, onSaveMessage, isUserSpeakingRef, {
     onAiStartedResponding: callbacks?.onAiStartedResponding,
     onAiFinishedSpeaking: callbacks?.onAiFinishedSpeaking,
     onTokenUsage: callbacks?.onTokenUsage,
   });
 
-  const mic = useGeminiMic(
+  const mic = useInterviewMic(
     session.send,
     session.isModelSpeakingRef,
     isUserSpeakingRef,

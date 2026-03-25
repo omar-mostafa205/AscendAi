@@ -19,26 +19,21 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    let ignore = false
     let current: Socket | null = null
     const rawSocketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8001"
-    // socket.io-client expects an http(s) base URL; it upgrades to ws/wss automatically.
     const socketUrl = rawSocketUrl
       .replace(/^wss:\/\//i, "https://")
       .replace(/^ws:\/\//i, "http://")
 
     const connect = async (accessToken: string) => {
-      if (cancelled) return
-      // Important: do NOT disconnect/recreate the socket on token refresh or tab switches.
-      // Recreating the socket causes "transport close" and forces the session to re-join.
+      if (ignore) return
       if (current) {
-        // Update auth for future reconnect handshakes.
-        ;(current as any).auth = { token: accessToken }
+        (current as any).auth = { token: accessToken }
         if (!current.connected) {
           try {
             current.connect()
           } catch {
-            // ignore
           }
         }
         return
@@ -52,11 +47,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
       current.on("connect_error", (error) => {
         console.error("Socket connection error", error)
-        toast.error("Connection error. Retrying...")
       })
 
       current.on("error", ({ message }: { message: string }) => {
-        toast.error(message)
+        console.error("Socket error", message)
       })
 
       setSocket(current)
@@ -80,7 +74,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => {
-      cancelled = true
+      ignore = true
       listener.subscription.unsubscribe()
       disconnect()
     }

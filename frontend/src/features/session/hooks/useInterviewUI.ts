@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { SimulationStage, LoadingStepKey, LoadingStep, LOADING_STEPS } from "../types/simulation.types";
 
-export const useSimulation = () => {
+export const useInterviewUI = () => {
   const [stage, _setStage] = useState<SimulationStage>("idle");
   const [loadingSteps, setLoadingSteps] = useState<LoadingStep[]>(
     (Object.entries(LOADING_STEPS) as [LoadingStepKey, any][]).map(([key, val]) => ({

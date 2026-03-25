@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSocket } from "./useSocket";
-import { useGeminiLive } from "./useGemini";
-import { useSimulation } from "./useSimulation";
+import { useGeminiVoice } from "./useGeminiVoice";
+import { useInterviewUI } from "./useInterviewUI";
 import { SessionService } from "../services/session.service";
 import { InterviewSession, MAX_SESSION_DURATION_MS } from "../types/session.types";
 
@@ -14,7 +14,7 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
   const queryClient = useQueryClient();
   const autoEndTimerRef = useRef<number | null>(null);
   const isEndingRef = useRef(false);
-  const simulation = useSimulation();
+  const simulation = useInterviewUI();
   const { saveMessage, endSession, isEnded, sessionJoined } = useSocket(sessionId);
   const [micStartedAtMs, setMicStartedAtMs] = useState<number | null>(null);
 
@@ -34,7 +34,7 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
     isModelSpeaking,
     isMicActive,
     error,
-  } = useGeminiLive(sessionId, onSaveMessage, {
+  } = useGeminiVoice(sessionId, onSaveMessage, {
     onUserStartedSpeaking: simulation.onUserStartedSpeaking,
     onUserStoppedSpeaking: simulation.onUserStoppedSpeaking,
     onAiStartedResponding: simulation.onAiStartedResponding,

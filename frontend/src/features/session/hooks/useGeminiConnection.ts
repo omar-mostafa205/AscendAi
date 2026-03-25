@@ -3,7 +3,7 @@ import { SessionService } from "@/features/session/services/session.service";
 import { normalizeTranscript, shouldIgnoreTranscript, mergeTranscript } from "../utils";
 import { getStoredSessionHandle, storeSessionHandle } from "../utils";
 
-export function useGeminiSession(
+export function useGeminiConnection(
   sessionId: string,
   onSaveMessage: (role: "user" | "assistant", content: string) => void,
   isUserSpeakingRef: React.MutableRefObject<boolean>,
