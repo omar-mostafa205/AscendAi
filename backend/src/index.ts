@@ -27,7 +27,7 @@ async function bootstrap() {
 
     await startSessionWorker()
 
-    const PORT = env.PORT 
+    const PORT = env.PORT
 
     server.listen(PORT, () => {
       logger.info("Server started", {
@@ -55,6 +55,7 @@ async function bootstrap() {
   } catch (error) {
     logger.error("Failed to start server", {
       error: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
     })
     Sentry.captureException(error, { tags: { phase: "startup" } })
     await Sentry.close(2000)
