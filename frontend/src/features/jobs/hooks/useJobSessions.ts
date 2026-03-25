@@ -44,7 +44,7 @@ export function useJobSessions(jobId: string) {
     },
     onError: (error) => {
       toast.error("Failed to start interview", {
-        description: error instanceof Error ? "You have exceded the maximum number of interviews" : "Please try again.",
+        description: error instanceof Error ? error.message : "Unknown error",
       })
     },
   })

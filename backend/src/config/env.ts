@@ -18,9 +18,7 @@ for (const p of envCandidates) {
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]),
-  // Local dev defaults to 8001 (matches docs/tests); in production Railway injects `PORT`.
   PORT: z.coerce.number().default(8001),
-  // Comma-separated allowlist; required in production.
   FRONTEND_URL: z.string().default(""),
   SENTRY_DSN: z.string().optional(),
 
