@@ -1,15 +1,16 @@
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import rateLimit from "express-rate-limit"
 
 export const rateLimitMiddleware = rateLimit({
-  windowMs: 15 * 60 * 1000, 
+  windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
 
-  keyGenerator: (req, res) => {
-    const ip = ipKeyGenerator(req as any, res);
-    return `${ip}-${req.headers["x-forwarded-for"] ?? "no-forwarded-for"}`;
-  },
+  keyGenerator: (req): string =>
+    (req.headers["x-forwarded-for"] as string) ??
+    req.ip ??
+    req.socket.remoteAddress ??
+    "unknown",
 
   message: {
     status: 429,
@@ -17,7 +18,7 @@ export const rateLimitMiddleware = rateLimit({
   },
 
   handler: (req, res, _next, options) => {
-    console.warn(`[RateLimit] IP ${req.ip} exceeded limit`);
-    res.status(429).json(options.message);
+    console.warn(`[RateLimit] IP ${req.ip} exceeded limit`)
+    res.status(429).json(options.message)
   },
-});
+})

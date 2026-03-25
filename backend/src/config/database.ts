@@ -19,17 +19,17 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-if (env.NODE_ENV === 'development') {
-  prisma.$on<any>('query', (e) => {
-    if ('query' in e) {
-      logger.info(`Prisma query executed`, {
-        query: e.query,
-        params: e.params,
-        durationMs: e.duration, 
-      });
-    }
-  });
-}
+// if (env.NODE_ENV === 'development') {
+//   prisma.$on<any>('query', (e) => {
+//     if ('query' in e) {
+//       logger.info(`Prisma query executed`, {
+//         query: e.query,
+//         params: e.params,
+//         durationMs: e.duration, 
+//       });
+//     }
+//   });
+// }
 
 export async function connectDb(): Promise<void> {
   try {
