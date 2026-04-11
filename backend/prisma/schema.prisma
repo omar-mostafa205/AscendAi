@@ -1,4 +1,4 @@
-generator client {
+rgenerator client {
     provider = "prisma-client-js"
 }
 
@@ -69,7 +69,7 @@ model InterviewSession {
     personaId       String?   @map("persona_id") @db.Uuid
     scenarioType    String    @map("scenario_type")
     difficultyLevel String    @default("medium") @map("difficulty_level")
-    status          String    @default("active")
+    status          String    @default("created")
     startedAt       DateTime  @default(now()) @map("started_at")
     endedAt         DateTime? @map("ended_at")
     overallScore    Int?      @map("overall_score")

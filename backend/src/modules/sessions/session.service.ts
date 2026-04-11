@@ -18,7 +18,7 @@ async function createSession(
 
   if (!job) throw new Error(`Job not found: ${jobId}`)
   const sessionsCount = await prisma.interviewSession.count({ where: { userId } })
-  if (sessionsCount >= 2) {
+  if (sessionsCount >= 20000) {
     throw new Error("Session limit reached. Please contact support to increase your limit.")
   }
   const persona = await personaService.getOrCreatePersona(job, scenarioType)

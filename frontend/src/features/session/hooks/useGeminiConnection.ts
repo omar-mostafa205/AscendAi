@@ -1,22 +1,42 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { SessionService } from "@/features/session/services/session.service";
 import { normalizeTranscript, shouldIgnoreTranscript, mergeTranscript } from "../utils";
 import { getStoredSessionHandle, storeSessionHandle } from "../utils";
+
+
+interface GeminiCallbacks {
+  onAiStartedResponding?: () => void;
+  onAiFinishedSpeaking?: () => void;
+  onTokenUsage?: () => void;
+  onInputTranscriptionUpdate?: () => void;
+}
+
+
+const MAX_RECONNECT_ATTEMPTS = 5;
+const BASE_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 30_000;
+const CONNECT_TIMEOUT_MS = 15_000;
+
 
 export function useGeminiConnection(
   sessionId: string,
   onSaveMessage: (role: "user" | "assistant", content: string) => void,
   isUserSpeakingRef: React.MutableRefObject<boolean>,
-  callbacks?: {
-    onAiStartedResponding?: () => void;
-    onAiFinishedSpeaking?: () => void;
-    onTokenUsage?: () => void;
-    onInputTranscriptionUpdate?: () => void;
-  }
+  callbacks?: GeminiCallbacks
 ) {
   const [isConnected, setIsConnected] = useState(false);
   const [isModelSpeaking, setIsModelSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const callbacksRef = useRef<GeminiCallbacks | undefined>(callbacks);
+  useEffect(() => {
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
+
+  const onSaveMessageRef = useRef(onSaveMessage);
+  useEffect(() => {
+    onSaveMessageRef.current = onSaveMessage;
+  }, [onSaveMessage]);
 
   const sessionRef = useRef<WebSocket | null>(null);
   const isModelSpeakingRef = useRef(false);
@@ -26,20 +46,28 @@ export function useGeminiConnection(
   const sessionHandleRef = useRef<string | null>(null);
   const connectResolveRef = useRef<(() => void) | null>(null);
   const connectRejectRef = useRef<((e: Error) => void) | null>(null);
-  const connectTimeoutRef = useRef<number | null>(null);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // transcript refs
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isIntentionalDisconnectRef = useRef(false);
+
   const pendingUserTranscriptRef = useRef<string | null>(null);
   const pendingAssistantTranscriptRef = useRef<string | null>(null);
   const lastSavedUserTranscriptRef = useRef<string | null>(null);
   const lastSavedAssistantTranscriptRef = useRef<string | null>(null);
-  const lastAssistantTranscriptUpdateAtRef = useRef<number>(0);
 
-  // playback refs
   const playbackContextRef = useRef<AudioContext | null>(null);
   const scheduledNodesRef = useRef<AudioBufferSourceNode[]>([]);
   const nextPlayTimeRef = useRef<number>(0);
   const bufferedAiAudioRef = useRef<string[]>([]);
+
+  const clearConnectTimeout = useCallback(() => {
+    if (connectTimeoutRef.current !== null) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
+  }, []);
 
   const send = useCallback((data: string) => {
     const ws = sessionRef.current;
@@ -73,10 +101,9 @@ export function useGeminiConnection(
     source.start(nextPlayTimeRef.current);
     nextPlayTimeRef.current += buf.duration;
     scheduledNodesRef.current.push(source);
+
     source.onended = () => {
-      scheduledNodesRef.current = scheduledNodesRef.current.filter(
-        (n) => n !== source
-      );
+      scheduledNodesRef.current = scheduledNodesRef.current.filter((n) => n !== source);
     };
   }, []);
 
@@ -109,17 +136,17 @@ export function useGeminiConnection(
       user !== lastSavedUserTranscriptRef.current
     ) {
       lastSavedUserTranscriptRef.current = user;
-      onSaveMessage("user", user);
+      onSaveMessageRef.current("user", user);
     }
-  }, [onSaveMessage]);
+  }, []);
+
 
   const interrupt = useCallback(() => {
-    scheduledNodesRef.current.forEach((n) => {
-      try {
-        n.stop();
-      } catch {}
+    const nodes = scheduledNodesRef.current;
+    scheduledNodesRef.current = [];   
+    nodes.forEach((n) => {
+      try { n.stop(); } catch {}
     });
-    scheduledNodesRef.current = [];
     nextPlayTimeRef.current = 0;
     send(
       JSON.stringify({
@@ -133,16 +160,25 @@ export function useGeminiConnection(
     setIsModelSpeaking(false);
   }, [send]);
 
-  const disconnect = useCallback(() => {
-    flushPendingTranscripts();
-    interrupt();
-    playbackContextRef.current?.close().catch(() => {});
-    playbackContextRef.current = null;
-    bufferedAiAudioRef.current = [];
-    sessionRef.current?.close();
-    sessionRef.current = null;
-    setIsConnected(false);
-  }, [interrupt, flushPendingTranscripts]);
+  const disconnect = useCallback(
+    (intentional = true) => {
+      if (reconnectTimerRef.current !== null) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      isIntentionalDisconnectRef.current = intentional;
+      flushPendingTranscripts();
+      interrupt();
+      clearConnectTimeout();
+      playbackContextRef.current?.close().catch(() => {});
+      playbackContextRef.current = null;
+      bufferedAiAudioRef.current = [];
+      sessionRef.current?.close();
+      sessionRef.current = null;
+      setIsConnected(false);
+    },
+    [interrupt, flushPendingTranscripts, clearConnectTimeout]
+  );
 
   const connect = useCallback(
     async (options?: { token?: string }) => {
@@ -150,10 +186,17 @@ export function useGeminiConnection(
       hasSentSetupRef.current = false;
       hasReceivedSetupCompleteRef.current = false;
 
+      hasSentKickoffRef.current = false;
+
       const token =
         options?.token ??
         (await SessionService.getLiveToken(sessionId))?.data?.token;
-      if (!token) throw new Error("Missing auth token");
+
+      if (!token) {
+        const err = new Error("Missing auth token");
+        setError(err.message);
+        throw err;
+      }
 
       const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(wsUrl);
@@ -163,10 +206,14 @@ export function useGeminiConnection(
       const connectPromise = new Promise<void>((resolve, reject) => {
         connectResolveRef.current = resolve;
         connectRejectRef.current = reject;
-        connectTimeoutRef.current = window.setTimeout(
-          () => reject(new Error("Timed out")),
-          15000
-        );
+
+        clearConnectTimeout();
+        connectTimeoutRef.current = setTimeout(() => {
+          connectTimeoutRef.current = null;
+          connectRejectRef.current?.(new Error("Timed out"));
+          connectResolveRef.current = null;
+          connectRejectRef.current = null;
+        }, CONNECT_TIMEOUT_MS);
       });
 
       ws.onopen = () => {
@@ -194,8 +241,9 @@ export function useGeminiConnection(
 
         if (msg.setupComplete !== undefined) {
           hasReceivedSetupCompleteRef.current = true;
+          clearConnectTimeout();
           setIsConnected(true);
-          window.clearTimeout(connectTimeoutRef.current!);
+          reconnectAttemptsRef.current = 0;
           connectResolveRef.current?.();
           connectResolveRef.current = null;
           connectRejectRef.current = null;
@@ -225,7 +273,7 @@ export function useGeminiConnection(
             if (!isModelSpeakingRef.current) {
               isModelSpeakingRef.current = true;
               setIsModelSpeaking(true);
-              callbacks?.onAiStartedResponding?.();
+              callbacksRef.current?.onAiStartedResponding?.();
             }
             serverContent.modelTurn.parts?.forEach((p: any) => {
               if (p.inlineData?.data) handleAudioOutput(p.inlineData.data);
@@ -235,11 +283,10 @@ export function useGeminiConnection(
           if (serverContent.turnComplete) {
             isModelSpeakingRef.current = false;
             setIsModelSpeaking(false);
-            callbacks?.onAiFinishedSpeaking?.();
+            callbacksRef.current?.onAiFinishedSpeaking?.();
             if (scheduledNodesRef.current.length === 0)
               nextPlayTimeRef.current = 0;
 
-            // Flush user transcript first to preserve chronological order
             const userRaw = pendingUserTranscriptRef.current;
             if (userRaw) {
               const userT = normalizeTranscript(userRaw);
@@ -249,7 +296,7 @@ export function useGeminiConnection(
                 userT !== lastSavedUserTranscriptRef.current
               ) {
                 lastSavedUserTranscriptRef.current = userT;
-                onSaveMessage("user", userT);
+                onSaveMessageRef.current("user", userT);
               }
               pendingUserTranscriptRef.current = null;
             }
@@ -263,10 +310,9 @@ export function useGeminiConnection(
               t !== lastSavedAssistantTranscriptRef.current
             ) {
               lastSavedAssistantTranscriptRef.current = t;
-              onSaveMessage("assistant", t);
+              onSaveMessageRef.current("assistant", t);
             }
             pendingAssistantTranscriptRef.current = null;
-            lastAssistantTranscriptUpdateAtRef.current = 0;
           }
 
           if (serverContent.outputTranscription?.text) {
@@ -276,7 +322,6 @@ export function useGeminiConnection(
                 pendingAssistantTranscriptRef.current,
                 t
               );
-              lastAssistantTranscriptUpdateAtRef.current = Date.now();
             }
           }
 
@@ -287,7 +332,7 @@ export function useGeminiConnection(
                 pendingUserTranscriptRef.current,
                 t
               );
-              callbacks?.onInputTranscriptionUpdate?.();
+              callbacksRef.current?.onInputTranscriptionUpdate?.();
             }
           }
         }
@@ -303,15 +348,31 @@ export function useGeminiConnection(
         }
 
         if (msg.goAway) {
-          disconnect();
-          setTimeout(() => connect(), 2000); // no options → fresh token fetched inside connect()
+          const attempt = reconnectAttemptsRef.current;
+          if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+            setError(`Failed to reconnect after ${MAX_RECONNECT_ATTEMPTS} attempts`);
+            disconnect(true);
+            return;
+          }
+          reconnectAttemptsRef.current += 1;
+          const delay = Math.min(
+            BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt),
+            MAX_RECONNECT_DELAY_MS
+          );
+
+          disconnect(false);
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
+            connect();
+          }, delay);
         }
 
-        if (msg.usageMetadata) callbacks?.onTokenUsage?.();
+        if (msg.usageMetadata) callbacksRef.current?.onTokenUsage?.();
       };
 
       ws.onerror = () => {
         setError("WebSocket error");
+        clearConnectTimeout();
         connectRejectRef.current?.(new Error("WebSocket error"));
         connectResolveRef.current = null;
         connectRejectRef.current = null;
@@ -319,6 +380,7 @@ export function useGeminiConnection(
 
       ws.onclose = (event) => {
         setIsConnected(false);
+        clearConnectTimeout();
         if (!hasReceivedSetupCompleteRef.current) {
           connectRejectRef.current?.(
             new Error(`Closed before setupComplete (code=${event.code})`)
@@ -330,12 +392,20 @@ export function useGeminiConnection(
 
       return connectPromise;
     },
-    [sessionId, handleAudioOutput, disconnect, onSaveMessage, callbacks]
+    [sessionId, handleAudioOutput, disconnect, clearConnectTimeout]
   );
+
+  useEffect(() => {
+    return () => {
+      if (reconnectTimerRef.current !== null) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+    };
+  }, []);
 
   return {
     connect,
-    disconnect,
+    disconnect: () => disconnect(true),
     interrupt,
     flushPendingTranscripts,
     flushBufferedAiAudio,

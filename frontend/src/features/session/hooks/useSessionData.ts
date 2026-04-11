@@ -1,5 +1,3 @@
-// features/session/hooks/useSessionData.ts
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionService } from "../services/session.service";

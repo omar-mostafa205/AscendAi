@@ -236,34 +236,43 @@ Namespace: default (`io`), room = `sessionId`
 
 The backend buffers `save_message` events and periodically flushes them into `interview_sessions.messages` to avoid excessive DB writes.
 
-## Low Latency Design (Interview Session)
+## Deep Dive: Real-time Audio Pipeline (Low Latency)
 
-Low latency is primarily achieved by preventing main-thread overload and WebSocket backpressure during streaming.
+Achieving "life-like" latency in a voice-based AI interview is critical. AscendAI uses a specialized pipeline to minimize the Round Trip Time (RTT) between user speech and AI response.
 
-### Key choices
+### 1. AudioWorklet (The Secret Sauce)
+Traditional `ScriptProcessorNode` runs on the browser's main thread, making it prone to "jank" when the UI renders. We use an **AudioWorklet**, which runs on a dedicated high-priority audio thread.
+- **Source**: `frontend/public/gemini-audio-processor.worklet.js`
+- **Benefit**: Zero-latency capture even when the React components are re-rendering.
 
-1. **AudioWorklet (not ScriptProcessorNode)**  
-   ScriptProcessor is deprecated and runs on the main thread. AudioWorklet runs on the audio rendering thread, which is far more stable under UI load.
-   - Worklet: `frontend/public/gemini-audio-processor.worklet.js`
-   - Mic hook: `frontend/src/features/session/hooks/useGeminiMic.ts`
+### 2. Strategic Chunking & Encoding
+To balance network overhead and latency, we don't send individual audio samples. Instead, we chunk audio into **40ms frames** (`CHUNK_SAMPLES = 640` @ 16kHz). 
+- **Encoding**: Audio is captured as Float32 and converted to **PCM 16-bit** (signed) before being base64 encoded.
+- **Service**: `frontend/src/features/session/services/audio.service.ts`
 
-2. **Chunking mic audio to reduce WS send frequency**  
-   Sending audio frames too frequently causes CPU overhead (base64 + JSON) and WS congestion, which shows up as "AI started responding" taking seconds.  
-   We chunk at `CHUNK_SAMPLES = 640` @ 16kHz → ~40ms → ~25 sends/sec.
+### 3. Voice Activity Detection (VAD)
+We implement a high-performance VAD within the AudioWorklet to detect speech starts/stops instantly.
+- When speech is detected, we send a `realtimeInput.activityStart`.
+- When silence is detected for `SILENCE_DURATION_MS`, we send `realtimeInput.activityEnd`.
+- This tells Gemini Live to stop listening and start processing immediately, shaving off valuable milliseconds compared to server-side silence detection.
 
-3. **VAD + explicit activityStart/activityEnd**  
-   Fast and consistent turn-end signaling reduces "turn-taking latency" (model starts responding sooner).  
-   `SILENCE_DURATION_MS` controls the safety vs speed tradeoff.
+---
 
-4. **Optimized PCM16 base64 encoding**  
-   Base64 encoding is a hot path; chunked conversion reduces main-thread cost.
-   - `frontend/src/features/session/services/audio.service.ts`
+## Deep Dive: Socket.IO Message Persistence Strategy
 
-### Latency tuning knobs
+Handling high-frequency message streams (transcripts) during a live session can overwhelm a standard database if every update is a direct `UPDATE` query.
 
-- `CHUNK_SAMPLES` (worklet): smaller → lower latency, higher overhead; larger → higher latency, lower overhead
-- `SILENCE_DURATION_MS` (worklet): lower → AI starts faster, but can cut off pauses; higher → safer, slower
-- VAD thresholds (`SPEECH_ON_THRESHOLD`, `SPEECH_OFF_THRESHOLD`): affects when speech starts/stops
+### In-Memory Buffering (0.8s Flush)
+The backend employs a "buffering & flushing" strategy to protect PostgreSQL:
+1. **Queueing**: Every `save_message` event from the client is pushed into an in-memory `Map` (keyed by `sessionId`).
+2. **Debounced Flush**: A timer is set for **800ms**. If new messages arrive within this window, they are appended to the buffer and the timer resets.
+3. **Atomic Commit**: After 800ms of inactivity, the entire buffer is merged with the existing `interview_sessions.messages` JSONB array in a single database transaction.
+
+### Safety Hooks
+- **End Session**: A manual session end triggers an immediate synchronous flush of all pending messages.
+- **Auto-Flush on Disconnect**: If a user's socket disconnects, the server waits **5 seconds** (grace period for reconnection). If the session remains empty, it flushes all messages and auto-sets the status to `processing`.
+
+---
 
 ## Local Development
 
@@ -318,38 +327,46 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=...
 NEXT_PUBLIC_GOOGLE_CLIENT_SECERT=...
 ```
 
-### 2) Install Dependencies
-
+### 2) Install & Initialize
 ```bash
-cd backend && npm i
-cd ../frontend && npm i
+# Backend
+cd backend && npm install
+npx prisma generate
+npx prisma migrate dev  # Sync database schema
+
+# Frontend
+cd ../frontend && npm install
 ```
 
-### 3) Start Backend + Worker
-
-The backend starts the BullMQ worker during bootstrap.
-
+### 3) Start Services
 ```bash
+# Backend & Worker
 cd backend
 npm run dev
-```
 
-Health check:
-
-```bash
-curl http://localhost:8000/health
-```
-
-### 4) Start Frontend
-
-```bash
-cd frontend
+# Frontend
+cd ../frontend
 npm run dev
 ```
 
-Open:
+## Quality Assurance & Testing
 
-- `http://localhost:3000`
+We maintain high system reliability through comprehensive automated testing.
+
+### End-to-End (E2E) Tests
+We use **Playwright** to test critical paths like authentication, job creation, and session management.
+```bash
+# Run all E2E tests
+cd frontend
+npm run test:e2e
+```
+
+### Database Integrity
+Always ensure your Prisma client is hydrated after schema changes:
+```bash
+cd backend
+npx prisma generate
+```
 
 ## Realtime Interview Session (How it Works)
 

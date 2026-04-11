@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { io, Socket } from "socket.io-client"
 import { supabase } from "@/shared/lib/supabase"
-import { toast } from "sonner"
 
 type SocketContextType = {
   socket: Socket | null

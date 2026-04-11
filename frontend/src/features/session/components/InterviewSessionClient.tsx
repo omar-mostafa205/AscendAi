@@ -71,7 +71,7 @@ export function InterviewSessionClient({ sessionId }: InterviewSessionClientProp
         scenarioLabel={config.label}
         elapsedTime={elapsedTime}
       />
-
+      
       <AvatarDisplay
         image={config.image}
         label={config.label}

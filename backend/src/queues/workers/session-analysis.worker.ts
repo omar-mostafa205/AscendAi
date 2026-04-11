@@ -7,10 +7,14 @@ import { redisQueue } from "../../config/redis"
 import { GoogleGenAI } from "@google/genai"
 import { env } from "../../config/env"
 
+
 type ScenarioType = "technical" | "background" | "culture"
 
+let sessionWorker: Worker | null = null
+
+export  const getSessionWorker = ()=> sessionWorker
 export const startSessionWorker = async (): Promise<void> => {
-  const worker = new Worker(
+   sessionWorker = new Worker(
     "session-analysis",
     async (job) => {
       const { sessionId } = job.data
@@ -70,17 +74,21 @@ export const startSessionWorker = async (): Promise<void> => {
     },
     {
       connection: redisQueue.options,
+      drainDelay: 60,
+      stalledInterval: 60000,
+      lockDuration: 60000, 
+
     }
   )
 
-  worker.on("completed", (job) => {
+  sessionWorker.on("completed", (job) => {
     logger.info("Job completed", { 
       service: "AscendAI",
       jobId: job.id 
     })
   })
 
-  worker.on("failed", (job, error) => {
+  sessionWorker.on("failed", (job, error) => {
     Sentry.captureException(error, {
       extra: { 
         jobId: job?.id, 

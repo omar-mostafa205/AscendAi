@@ -34,7 +34,7 @@ export const LOADING_STEPS: Record<LoadingStepKey, Omit<LoadingStep, "completed"
     progress: 20
   },
   generating_persona: {
-    label: "Generating Dynamic Persona",
+    label: "Generating Dynamic pPersona",
     description: "Building the interviewer persona...",
     progress: 40
   },

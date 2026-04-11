@@ -69,11 +69,18 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
         const lastIdx = merged.length - 1
         const lastMsg = lastIdx >= 0 ? merged[lastIdx] : null
 
-        if (lastMsg && lastMsg.role === m.role && m.content.startsWith(lastMsg.content)) {
-          merged[lastIdx] = m
+        if (lastMsg && lastMsg.role === m.role) {
+          if (m.content.startsWith(lastMsg.content)) {
+            merged[lastIdx] = m
+          } else {
+            merged[lastIdx] = {
+              ...lastMsg,
+              content: lastMsg.content + " " + m.content,
+            }
+          }
           continue
         }
-
+        
         const isDuplicate = merged.some(
           (msg) => msg.role === m.role && msg.content === m.content
         )
@@ -309,7 +316,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
 
           if (!session) return
 
-          if (session.status !== "in_progress" && session.status !== "active") {
+          if (session.status !== "in_progress" && session.status !== "created") {
             logger.debug("Session not active, skipping auto-end", { sessionId, status: session.status })
             return
           }
@@ -331,7 +338,7 @@ export const registerSessionHandlers = (io: Server, socket: Socket) => {
           await prisma.interviewSession.updateMany({
             where: { id: sessionId, userId },
             data: {
-              status: "processing",
+              status: "analyzing",
               endedAt: new Date()
             },
           })

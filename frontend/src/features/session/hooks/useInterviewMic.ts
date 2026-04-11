@@ -76,7 +76,6 @@ export function useInterviewMic(
           setIsUserSpeaking(true);
           callbacks?.onUserStartedSpeaking?.();
 
-          // Cancel any pending finalize — user is still speaking
           if (finalizeTimerRef.current) {
             window.clearTimeout(finalizeTimerRef.current);
             finalizeTimerRef.current = null;
@@ -180,4 +179,5 @@ export function useInterviewMic(
   }, [send, isUserSpeakingSharedRef]);
 
   return { startMic, stopMic, isMicActive, isUserSpeaking, notifyTranscriptUpdate };
+
 }

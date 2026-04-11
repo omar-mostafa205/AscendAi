@@ -89,7 +89,7 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
       stopMic();
       disconnect();
     };
-  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session]);
 
   useEffect(() => {
     if (isEndingRef.current) return;

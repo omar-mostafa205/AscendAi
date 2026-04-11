@@ -6,7 +6,7 @@ import * as Sentry from "@sentry/node"
 import { requestLogger } from "./middleware/logger"
 import { errorHandler, notFoundHandler } from "./middleware/error"
 import { initializeSocket } from "./socket"
-import routes from "./routes"
+import routes from "./modules"
 import { env } from "./config/env"
 import { rateLimitMiddleware } from "./middleware/rate-limit.middleware"
 
