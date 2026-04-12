@@ -1,5 +1,5 @@
 // services/ai/prompts/feedback.prompt.ts
-type ScenarioType = "technical" | "background" | "culture"
+type ScenarioType = "technical" | "background" | "culture";
 
 const scoringFields: Record<ScenarioType, string> = {
   technical: `
@@ -13,11 +13,11 @@ const scoringFields: Record<ScenarioType, string> = {
 
   culture: `
   "communicationScore": <number 0-100>,`,
-}
+};
 
 export const buildFeedbackPrompt = (
   conversation: string,
-  scenarioType: ScenarioType
+  scenarioType: ScenarioType,
 ): string => {
   return `
 You are an expert interview coach evaluating a ${scenarioType} job interview.
@@ -53,5 +53,5 @@ No preamble, no explanation, no markdown fences — just the raw JSON.
   "overallScore": <number 0-100>,
   "summary": "<2-3 sentence overall assessment of the candidate>"
 }
-`.trim()
-}
+`.trim();
+};

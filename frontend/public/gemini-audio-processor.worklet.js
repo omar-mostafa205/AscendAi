@@ -55,7 +55,7 @@ class GeminiAudioProcessor extends AudioWorkletProcessor {
       this.lastVoiceAt = now;
       this.voiceFrames = Math.min(
         this.VOICE_FRAMES_REQUIRED,
-        this.voiceFrames + 1
+        this.voiceFrames + 1,
       );
 
       if (
@@ -136,7 +136,7 @@ class GeminiAudioProcessor extends AudioWorkletProcessor {
           timestamp: now,
           isUserSpeaking,
         },
-        [chunk.buffer]
+        [chunk.buffer],
       );
     }
 

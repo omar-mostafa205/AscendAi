@@ -7,4 +7,4 @@ export default defineConfig({
     url: env("DIRECT_URL"),
   },
 });
-//trigger 
+//trigger

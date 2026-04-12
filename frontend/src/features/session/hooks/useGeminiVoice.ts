@@ -11,15 +11,20 @@ export const useGeminiVoice = (
     onAiStartedResponding?: () => void;
     onAiFinishedSpeaking?: () => void;
     onTokenUsage?: () => void;
-  }
+  },
 ) => {
   const isUserSpeakingRef = useRef(false);
 
-  const session = useGeminiConnection(sessionId, onSaveMessage, isUserSpeakingRef, {
-    onAiStartedResponding: callbacks?.onAiStartedResponding,
-    onAiFinishedSpeaking: callbacks?.onAiFinishedSpeaking,
-    onTokenUsage: callbacks?.onTokenUsage,
-  });
+  const session = useGeminiConnection(
+    sessionId,
+    onSaveMessage,
+    isUserSpeakingRef,
+    {
+      onAiStartedResponding: callbacks?.onAiStartedResponding,
+      onAiFinishedSpeaking: callbacks?.onAiFinishedSpeaking,
+      onTokenUsage: callbacks?.onTokenUsage,
+    },
+  );
 
   const mic = useInterviewMic(
     session.send,
@@ -34,7 +39,7 @@ export const useGeminiVoice = (
         callbacks?.onUserStoppedSpeaking?.();
         session.flushBufferedAiAudio();
       },
-    }
+    },
   );
 
   return {

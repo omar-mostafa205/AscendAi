@@ -1,4 +1,12 @@
-import { Eye, Code, Users, FileText, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import {
+  Eye,
+  Code,
+  Users,
+  FileText,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import { Card, CardContent } from "@/shared/components/ui/card";
@@ -82,19 +90,29 @@ export function SessionCard({
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <div>
-              <h4 className="font-medium text-[#1f1f1f]">{scenarioConf?.label ?? "Session"}</h4>
-              <p className="text-sm text-[#676662]">{formatRelativeTime(session.createdAt)}</p>
+              <h4 className="font-medium text-[#1f1f1f]">
+                {scenarioConf?.label ?? "Session"}
+              </h4>
+              <p className="text-sm text-[#676662]">
+                {formatRelativeTime(session.createdAt)}
+              </p>
             </div>
           </div>
-          {session.overallScore !== null && session.overallScore !== undefined && (
-            <div className="text-right">
-              <div className="text-2xl font-bold text-[#1b1917]">{session.overallScore}</div>
-              <div className="text-xs text-[#676662]">Score</div>
-            </div>
-          )}
+          {session.overallScore !== null &&
+            session.overallScore !== undefined && (
+              <div className="text-right">
+                <div className="text-2xl font-bold text-[#1b1917]">
+                  {session.overallScore}
+                </div>
+                <div className="text-xs text-[#676662]">Score</div>
+              </div>
+            )}
         </div>
         <div className="flex items-center justify-between">
-          <Badge variant="secondary" className="gap-1 bg-[#f0ebe6] text-[#1f1f1f]">
+          <Badge
+            variant="secondary"
+            className="gap-1 bg-[#f0ebe6] text-[#1f1f1f]"
+          >
             <StatusIcon className="w-3 h-3" />
             {statusConf?.label ?? session.status}
           </Badge>
@@ -114,4 +132,3 @@ export function SessionCard({
     </Card>
   );
 }
-

@@ -10,16 +10,20 @@ export function useSessionData(sessionId: string) {
 
   useEffect(() => {
     if (!sessionId) return;
-    
+
     let cancelled = false;
 
     const fetchSession = async () => {
       try {
         const { data } = await SessionService.getSession(sessionId);
-        
+
         if (cancelled) return;
 
-        if (data.endedAt || data.status === "processing" || data.status === "completed") {
+        if (
+          data.endedAt ||
+          data.status === "processing" ||
+          data.status === "completed"
+        ) {
           router.replace(`/jobs/${data.jobId}?feedbackSessionId=${sessionId}`);
           return;
         }
@@ -38,7 +42,9 @@ export function useSessionData(sessionId: string) {
     };
 
     fetchSession();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId, router]);
 
   return { session, loading };

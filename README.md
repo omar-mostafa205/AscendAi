@@ -241,17 +241,23 @@ The backend buffers `save_message` events and periodically flushes them into `in
 Achieving "life-like" latency in a voice-based AI interview is critical. AscendAI uses a specialized pipeline to minimize the Round Trip Time (RTT) between user speech and AI response.
 
 ### 1. AudioWorklet (The Secret Sauce)
+
 Traditional `ScriptProcessorNode` runs on the browser's main thread, making it prone to "jank" when the UI renders. We use an **AudioWorklet**, which runs on a dedicated high-priority audio thread.
+
 - **Source**: `frontend/public/gemini-audio-processor.worklet.js`
 - **Benefit**: Zero-latency capture even when the React components are re-rendering.
 
 ### 2. Strategic Chunking & Encoding
-To balance network overhead and latency, we don't send individual audio samples. Instead, we chunk audio into **40ms frames** (`CHUNK_SAMPLES = 640` @ 16kHz). 
+
+To balance network overhead and latency, we don't send individual audio samples. Instead, we chunk audio into **40ms frames** (`CHUNK_SAMPLES = 640` @ 16kHz).
+
 - **Encoding**: Audio is captured as Float32 and converted to **PCM 16-bit** (signed) before being base64 encoded.
 - **Service**: `frontend/src/features/session/services/audio.service.ts`
 
 ### 3. Voice Activity Detection (VAD)
+
 We implement a high-performance VAD within the AudioWorklet to detect speech starts/stops instantly.
+
 - When speech is detected, we send a `realtimeInput.activityStart`.
 - When silence is detected for `SILENCE_DURATION_MS`, we send `realtimeInput.activityEnd`.
 - This tells Gemini Live to stop listening and start processing immediately, shaving off valuable milliseconds compared to server-side silence detection.
@@ -263,12 +269,15 @@ We implement a high-performance VAD within the AudioWorklet to detect speech sta
 Handling high-frequency message streams (transcripts) during a live session can overwhelm a standard database if every update is a direct `UPDATE` query.
 
 ### In-Memory Buffering (0.8s Flush)
+
 The backend employs a "buffering & flushing" strategy to protect PostgreSQL:
+
 1. **Queueing**: Every `save_message` event from the client is pushed into an in-memory `Map` (keyed by `sessionId`).
 2. **Debounced Flush**: A timer is set for **800ms**. If new messages arrive within this window, they are appended to the buffer and the timer resets.
 3. **Atomic Commit**: After 800ms of inactivity, the entire buffer is merged with the existing `interview_sessions.messages` JSONB array in a single database transaction.
 
 ### Safety Hooks
+
 - **End Session**: A manual session end triggers an immediate synchronous flush of all pending messages.
 - **Auto-Flush on Disconnect**: If a user's socket disconnects, the server waits **5 seconds** (grace period for reconnection). If the session remains empty, it flushes all messages and auto-sets the status to `processing`.
 
@@ -328,6 +337,7 @@ NEXT_PUBLIC_GOOGLE_CLIENT_SECERT=...
 ```
 
 ### 2) Install & Initialize
+
 ```bash
 # Backend
 cd backend && npm install
@@ -339,6 +349,7 @@ cd ../frontend && npm install
 ```
 
 ### 3) Start Services
+
 ```bash
 # Backend & Worker
 cd backend
@@ -354,7 +365,9 @@ npm run dev
 We maintain high system reliability through comprehensive automated testing.
 
 ### End-to-End (E2E) Tests
+
 We use **Playwright** to test critical paths like authentication, job creation, and session management.
+
 ```bash
 # Run all E2E tests
 cd frontend
@@ -362,7 +375,9 @@ npm run test:e2e
 ```
 
 ### Database Integrity
+
 Always ensure your Prisma client is hydrated after schema changes:
+
 ```bash
 cd backend
 npx prisma generate

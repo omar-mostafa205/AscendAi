@@ -10,7 +10,9 @@ export function JobsGrid({ jobs }: JobsGridProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-serif text-[#1f1f1f]">Your application jobs</h2>
+        <h2 className="text-2xl font-serif text-[#1f1f1f]">
+          Your application jobs
+        </h2>
         <AddJobModal />
       </div>
 

@@ -1,5 +1,5 @@
-import { Queue } from "bullmq"
-import { redisQueue } from "../config/redis"
+import { Queue } from "bullmq";
+import { redisQueue } from "../config/redis";
 
 export const analysisQueue = new Queue("session-analysis", {
   connection: redisQueue.options,
@@ -12,4 +12,4 @@ export const analysisQueue = new Queue("session-analysis", {
     removeOnComplete: 1000,
     removeOnFail: 5000,
   },
-})
+});

@@ -1,28 +1,30 @@
-import { prisma } from "../../config/database"
-import logger from "../../config/logger"
+import { prisma } from "../../config/database";
+import logger from "../../config/logger";
 
 interface CreateJobInput {
-  userId: string
-  title: string
-  company: string
-  jobDescription: string
+  userId: string;
+  title: string;
+  company: string;
+  jobDescription: string;
 }
 
-
-
-const createJob = async ({ userId, title, company, jobDescription }: CreateJobInput) => {
+const createJob = async ({
+  userId,
+  title,
+  company,
+  jobDescription,
+}: CreateJobInput) => {
   const job = await prisma.job.create({
     data: {
       userId,
       title,
       company,
-      jobDescription
+      jobDescription,
     },
-  })
-  logger.info("Job created", { userId, jobId: job.id })
-  return job
-}
-
+  });
+  logger.info("Job created", { userId, jobId: job.id });
+  return job;
+};
 
 const getJobs = async (userId: string) => {
   const jobs = await prisma.job.findMany({
@@ -46,13 +48,13 @@ const getJobs = async (userId: string) => {
       },
     },
     orderBy: { createdAt: "desc" },
-  })
+  });
 
-  return jobs.map(job => ({
+  return jobs.map((job) => ({
     ...job,
     sessions: job.interviewSessions,
-  }))
-}
+  }));
+};
 
 const getJobById = async (jobId: string, userId: string) => {
   const job = await prisma.job.findUnique({
@@ -65,18 +67,18 @@ const getJobById = async (jobId: string, userId: string) => {
       jobDescription: true,
       createdAt: true,
     },
-  })
-  logger.info("Jobs fetched", { userId })
+  });
+  logger.info("Jobs fetched", { userId });
   if (!job) {
-    logger.warn("Job not found", { jobId, userId })
-    throw new Error("Job not found")
+    logger.warn("Job not found", { jobId, userId });
+    throw new Error("Job not found");
   }
 
-  return job
-}
+  return job;
+};
 
 export default {
   getJobs,
   getJobById,
   createJob,
-}
+};

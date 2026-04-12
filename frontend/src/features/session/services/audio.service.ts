@@ -1,14 +1,14 @@
 const AUDIO_CONFIG = {
-    INPUT_SAMPLE_RATE: 16000,
-    OUTPUT_SAMPLE_RATE: 24000,
-    BUFFER_SIZE: 4096,
-    SPEECH_ON_THRESHOLD: 0.012,
-    SPEECH_OFF_THRESHOLD: 0.007,
-    SILENCE_DURATION_MS: 1200,
-    FINALIZE_DELAY_MS: 950,
-    TRANSCRIPT_STABILIZE_MS: 800,
-    LATE_UPDATE_GRACE_MS: 1400,
-  } as const;
+  INPUT_SAMPLE_RATE: 16000,
+  OUTPUT_SAMPLE_RATE: 24000,
+  BUFFER_SIZE: 4096,
+  SPEECH_ON_THRESHOLD: 0.012,
+  SPEECH_OFF_THRESHOLD: 0.007,
+  SILENCE_DURATION_MS: 1200,
+  FINALIZE_DELAY_MS: 950,
+  TRANSCRIPT_STABILIZE_MS: 800,
+  LATE_UPDATE_GRACE_MS: 1400,
+} as const;
 
 /**
  * Handles audio encoding/decoding and playback scheduling for Gemini Live
@@ -59,7 +59,7 @@ export class GeminiAudioService {
       const audioBuffer = ctx.createBuffer(
         1,
         float32Array.length,
-        AUDIO_CONFIG.OUTPUT_SAMPLE_RATE
+        AUDIO_CONFIG.OUTPUT_SAMPLE_RATE,
       );
       audioBuffer.getChannelData(0).set(float32Array);
 
@@ -126,7 +126,11 @@ export class GeminiAudioService {
  * Converts PCM16 Int16Array to base64-encoded string
  */
 export function convertPCM16ToBase64(pcm16: Int16Array): string {
-  const bytes = new Uint8Array(pcm16.buffer, pcm16.byteOffset, pcm16.byteLength);
+  const bytes = new Uint8Array(
+    pcm16.buffer,
+    pcm16.byteOffset,
+    pcm16.byteLength,
+  );
   const parts: string[] = [];
   const CHUNK = 0x2000; // 8KB (safer across browsers)
 

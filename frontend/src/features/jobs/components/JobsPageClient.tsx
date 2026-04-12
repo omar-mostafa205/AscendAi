@@ -28,7 +28,9 @@ export function JobsPageClient() {
   return (
     <div className="min-h-screen bg-[#f5f2ef]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-4xl font-serif mb-8 text-[#1f1f1f]">My Interview Prep</h1>
+        <h1 className="text-4xl font-serif mb-8 text-[#1f1f1f]">
+          My Interview Prep
+        </h1>
         <ProgressCard stats={stats} />
         <JobsGrid jobs={jobs} />
       </div>

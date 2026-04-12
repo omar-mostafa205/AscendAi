@@ -21,20 +21,24 @@ export function storeSessionHandle(sessionId: string, handle: string): void {
 export function normalizeTranscript(input: string | null | undefined): string {
   if (input == null) return "";
   const str = typeof input === "string" ? input : String(input);
-  return str
-    .replace(/\s+/g, " ")
-    .replace(/<noise>/gi, "")
-    .replace(/\[(noise|silence)\]/gi, "")
-    .replace(/\(silence\)/gi, "")
-    // Remove whole-word stutters only (e.g. "and and and" -> "and")
-    // Removed the character-pattern repeat regex — it was corrupting real words
-    .replace(/\b(\w+)(\s+\1){2,}\b/gi, "$1")
-    .trim();
+  return (
+    str
+      .replace(/\s+/g, " ")
+      .replace(/<noise>/gi, "")
+      .replace(/\[(noise|silence)\]/gi, "")
+      .replace(/\(silence\)/gi, "")
+      // Remove whole-word stutters only (e.g. "and and and" -> "and")
+      // Removed the character-pattern repeat regex — it was corrupting real words
+      .replace(/\b(\w+)(\s+\1){2,}\b/gi, "$1")
+      .trim()
+  );
 }
 
 // Noise / Ignore Detection
 
-export function shouldIgnoreTranscript(inputRaw: string | null | undefined): boolean {
+export function shouldIgnoreTranscript(
+  inputRaw: string | null | undefined,
+): boolean {
   if (inputRaw == null) return true;
   const input = normalizeTranscript(inputRaw);
   if (!input) return true;
@@ -53,7 +57,18 @@ export function shouldIgnoreTranscript(inputRaw: string | null | undefined): boo
 
   // Pure filler words (only if the entire transcript is just fillers)
   const lower = input.toLowerCase();
-  const filler = new Set(["um", "uh", "erm", "hmm", "mm", "mhm", "ah", "eh", "ehm", "uhm"]);
+  const filler = new Set([
+    "um",
+    "uh",
+    "erm",
+    "hmm",
+    "mm",
+    "mhm",
+    "ah",
+    "eh",
+    "ehm",
+    "uhm",
+  ]);
   if (filler.has(lower)) return true;
 
   // No English letters or digits at all
@@ -71,7 +86,7 @@ export function shouldIgnoreTranscript(inputRaw: string | null | undefined): boo
 
 export function mergeTranscript(
   prevRaw: string | null,
-  nextRaw: string | null | undefined
+  nextRaw: string | null | undefined,
 ): string {
   const prevNorm = normalizeTranscript(prevRaw);
   const nextNorm = normalizeTranscript(nextRaw);
@@ -106,7 +121,9 @@ export function Timer(startedAtMs: number | null | undefined) {
   }, [startedAtMs]);
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const mins = Math.floor(seconds / 60)
+      .toString()
+      .padStart(2, "0");
     const secs = (seconds % 60).toString().padStart(2, "0");
     return `${mins}:${secs}`;
   };

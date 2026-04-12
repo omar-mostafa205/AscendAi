@@ -12,7 +12,10 @@ interface ErrorStateProps {
 export function ErrorState({ error, onRetry }: ErrorStateProps) {
   return (
     <div className="min-h-screen bg-[#f5f2ef] flex items-center justify-center">
-      <Card className={`max-w-md ${CARD_STYLES.className}`} style={CARD_STYLES.style}>
+      <Card
+        className={`max-w-md ${CARD_STYLES.className}`}
+        style={CARD_STYLES.style}
+      >
         <CardContent className="pt-6">
           <p className="text-red-600 text-center">
             {error.message || "Failed to load jobs"}

@@ -24,7 +24,7 @@ export function useInterviewMic(
   callbacks?: {
     onUserStartedSpeaking?: () => void;
     onUserStoppedSpeaking?: () => void;
-  }
+  },
 ) {
   const [isMicActive, setIsMicActive] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
@@ -95,7 +95,8 @@ export function useInterviewMic(
             send(JSON.stringify({ realtimeInput: { activityEnd: {} } }));
           }
 
-          if (finalizeTimerRef.current) window.clearTimeout(finalizeTimerRef.current);
+          if (finalizeTimerRef.current)
+            window.clearTimeout(finalizeTimerRef.current);
 
           finalizeTimerRef.current = window.setTimeout(() => {
             const age =
@@ -138,7 +139,7 @@ export function useInterviewMic(
           realtimeInput: {
             mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64 }],
           },
-        })
+        }),
       );
     };
 
@@ -178,6 +179,11 @@ export function useInterviewMic(
     setIsUserSpeaking(false);
   }, [send, isUserSpeakingSharedRef]);
 
-  return { startMic, stopMic, isMicActive, isUserSpeaking, notifyTranscriptUpdate };
-
+  return {
+    startMic,
+    stopMic,
+    isMicActive,
+    isUserSpeaking,
+    notifyTranscriptUpdate,
+  };
 }

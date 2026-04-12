@@ -1,8 +1,11 @@
-import { Job } from "@prisma/client"
+import { Job } from "@prisma/client";
 
-type ScenarioType = "technical" | "background" | "culture"
+type ScenarioType = "technical" | "background" | "culture";
 
-export const buildPersonaCreationPrompt = (job: Job, scenarioType: ScenarioType): string => `
+export const buildPersonaCreationPrompt = (
+  job: Job,
+  scenarioType: ScenarioType,
+): string => `
 You are an expert at creating realistic, professional interview personas for mock interview simulations.
 
 Based on the job description below, create a realistic interviewer persona that would conduct a ${scenarioType} interview for this role.
@@ -14,21 +17,26 @@ Based on the job description below, create a realistic interviewer persona that 
 </job_description>
 
 <interview_type>
-  ${scenarioType === "technical" ? `
+  ${
+    scenarioType === "technical"
+      ? `
   This is a TECHNICAL interview. The persona should be:
   - A senior or staff-level engineer at the company
   - Deeply technical, focused on problem-solving and system design
   - Direct and rigorous in evaluating technical depth
   - This should be a male persona
   - Known for asking follow-up questions that probe understanding
-  ` : scenarioType === "background" ? `
+  `
+      : scenarioType === "background"
+        ? `
   This is a BACKGROUND ALIGNMENT interview. The persona should be:
   - A hiring manager or engineering lead at the company
   - Focused on evaluating the candidate's experience and career trajectory
   - Interested in past projects, ownership, and impact
   - Assesses whether the candidate's background matches the role
   - This persona is more conversational and it is a female persona
-  ` : `
+  `
+        : `
   This is a CULTURE FIT interview. The persona should be:
   - A senior team member or people operations lead at the company
   - Focused on values alignment, collaboration, and team dynamics
@@ -36,7 +44,8 @@ Based on the job description below, create a realistic interviewer persona that 
   - Evaluates emotional intelligence and long-term motivation
   - This should be a male persona
 
-  `}
+  `
+  }
 </interview_type>
 
 Rules:
@@ -58,4 +67,4 @@ Respond ONLY with valid JSON, no preamble, no markdown:
   "agreeablenessLevel": "one of: low, medium, high",
   "neuroticismLevel": "one of: low, medium, high"
 }
-`
+`;

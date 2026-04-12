@@ -1,6 +1,6 @@
-import { Job, Persona } from "@prisma/client"
+import { Job, Persona } from "@prisma/client";
 
-type ScenarioType = "technical" | "background" | "culture"
+type ScenarioType = "technical" | "background" | "culture";
 
 const scenarioFocus: Record<ScenarioType, string> = {
   technical: `
@@ -26,12 +26,12 @@ This is a CULTURE FIT interview. Your focus:
 - Understand how they work under pressure and ambiguity
 - Look for self-awareness and communication quality
 `.trim(),
-}
+};
 
 export const buildLiveInterviewPrompt = (
   job: Job,
   persona: Persona,
-  scenarioType: ScenarioType
+  scenarioType: ScenarioType,
 ): string => {
   return `
 You are conducting a live voice interview. Stay in character at all times.
@@ -95,5 +95,5 @@ Start the session by doing these in order in one short paragraph:
 3. Say one sentence about what this interview will cover
 4. Ask your first question immediately
 </opening>
-`.trim()
-}
+`.trim();
+};

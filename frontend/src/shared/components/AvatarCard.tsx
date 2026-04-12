@@ -23,7 +23,9 @@ export function AvatarCard({
   height = 340,
   objectFit = "cover",
 }: AvatarCardProps) {
-  const cardStyle = backgroundColor ? ({ backgroundColor } as const) : undefined;
+  const cardStyle = backgroundColor
+    ? ({ backgroundColor } as const)
+    : undefined;
 
   return (
     <button
@@ -50,12 +52,8 @@ export function AvatarCard({
       </div>
 
       <div className="p-4 bg-background">
-        <h3 className="font-semibold text-sm text-foreground">
-          {title}
-        </h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          {description}
-        </p>
+        <h3 className="font-semibold text-sm text-foreground">{title}</h3>
+        <p className="text-xs text-muted-foreground mt-1">{description}</p>
       </div>
     </button>
   );

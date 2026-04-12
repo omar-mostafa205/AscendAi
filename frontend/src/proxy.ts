@@ -5,7 +5,9 @@ const PROTECTED_PREFIXES = ["/jobs", "/session"] as const;
 const AUTH_PAGES = ["/login", "/signup"] as const;
 
 function isProtectedPath(pathname: string) {
-  return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return PROTECTED_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
 }
 
 function isAuthPage(pathname: string) {
@@ -25,11 +27,15 @@ export async function proxy(request: NextRequest) {
         },
         setAll(cookies) {
           cookies.forEach(({ name, value, options }) => {
-            response.cookies.set({ name, value, ...(options as CookieOptions) });
+            response.cookies.set({
+              name,
+              value,
+              ...(options as CookieOptions),
+            });
           });
         },
       },
-    }
+    },
   );
 
   const {
@@ -56,11 +62,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/jobs/:path*",
-    "/session/:path*",
-    "/login",
-    "/signup",
-  ],
-
+  matcher: ["/jobs/:path*", "/session/:path*", "/login", "/signup"],
 };

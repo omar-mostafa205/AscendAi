@@ -56,7 +56,7 @@ export function AddJobModal({ trigger }: AddJobModalProps) {
         aria-describedby={undefined}
         className="sm:max-w-[520px] p-0 overflow-hidden rounded-2xl bg-white"
         style={{ border: "1px solid #b9b1ab" }}
->
+      >
         <DialogHeader
           className="px-6 pt-6 pb-4"
           style={{ borderBottom: "1px solid #e8e3de" }}

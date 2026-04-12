@@ -1,4 +1,4 @@
-import rateLimit, { ipKeyGenerator } from "express-rate-limit"
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 export const rateLimitMiddleware = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -7,7 +7,7 @@ export const rateLimitMiddleware = rateLimit({
   legacyHeaders: false,
 
   keyGenerator: (req): string => {
-    return ipKeyGenerator(req as any)
+    return ipKeyGenerator(req as any);
   },
 
   message: {
@@ -16,7 +16,7 @@ export const rateLimitMiddleware = rateLimit({
   },
 
   handler: (req, res, _next, options) => {
-    console.warn(`[RateLimit] IP ${req.ip} exceeded limit`)
-    res.status(429).json(options.message)
+    console.warn(`[RateLimit] IP ${req.ip} exceeded limit`);
+    res.status(429).json(options.message);
   },
-})
+});

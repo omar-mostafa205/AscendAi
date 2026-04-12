@@ -33,7 +33,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ? mapSupabaseUser(session.user) : null);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ? mapSupabaseUser(session.user) : null);
     });
 
@@ -41,9 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ user }}>{children}</AuthContext.Provider>
   );
 }
 

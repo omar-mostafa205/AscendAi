@@ -14,9 +14,11 @@ interface InterviewSessionClientProps {
   sessionId: string;
 }
 
-export function InterviewSessionClient({ sessionId }: InterviewSessionClientProps) {
+export function InterviewSessionClient({
+  sessionId,
+}: InterviewSessionClientProps) {
   const { session, loading: loadingSession } = useSessionData(sessionId);
-  
+
   const {
     simulation,
     isMicActive,
@@ -32,13 +34,13 @@ export function InterviewSessionClient({ sessionId }: InterviewSessionClientProp
   const { muted, toggleMute, handleToggleMic } = useSessionControls(
     isMicActive,
     startMic,
-    stopMic
+    stopMic,
   );
-  
-  const showLoading = 
-    loadingSession || 
-    simulation.stage === "fetching_token" || 
-    simulation.stage === "connecting_gemini" || 
+
+  const showLoading =
+    loadingSession ||
+    simulation.stage === "fetching_token" ||
+    simulation.stage === "connecting_gemini" ||
     simulation.stage === "initializing_ai" ||
     simulation.stage === "generating_persona";
 
@@ -71,12 +73,8 @@ export function InterviewSessionClient({ sessionId }: InterviewSessionClientProp
         scenarioLabel={config.label}
         elapsedTime={elapsedTime}
       />
-      
-      <AvatarDisplay
-        image={config.image}
-        label={config.label}
-        error={error}
-      />
+
+      <AvatarDisplay image={config.image} label={config.label} error={error} />
 
       <SessionControls
         isMicActive={isMicActive}

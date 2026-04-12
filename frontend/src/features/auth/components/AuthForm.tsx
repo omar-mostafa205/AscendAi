@@ -19,14 +19,14 @@ const OAUTH_PROVIDERS = [
 ] as const;
 
 const AuthForm = ({ signType }: { signType: "login" | "signup" }) => {
-  const { form, error, isLoading, onSubmit, handleOAuthSignIn } = useAuthForm(signType);
+  const { form, error, isLoading, onSubmit, handleOAuthSignIn } =
+    useAuthForm(signType);
 
   const isSignUp = signType === "signup";
 
   return (
     <div className="flex-1 flex flex-col justify-center px-8 md:px-16 lg:px-24 max-w-2xl">
       <div className="w-full max-w-md">
-
         <h2 className="text-2xl font-medium mb-6">AscendAI</h2>
 
         <h1 className="text-4xl md:text-5xl font-serif mb-4 text-foreground">
@@ -103,13 +103,11 @@ const AuthForm = ({ signType }: { signType: "login" | "signup" }) => {
               )}
             />
 
-            <Button
-              type="submit"
-              className="w-full mt-6"
-              disabled={isLoading}
-            >
+            <Button type="submit" className="w-full mt-6" disabled={isLoading}>
               {isLoading
-                ? isSignUp ? "Creating account..." : "Signing in..."
+                ? isSignUp
+                  ? "Creating account..."
+                  : "Signing in..."
                 : "Continue"}
             </Button>
           </form>
@@ -125,7 +123,6 @@ const AuthForm = ({ signType }: { signType: "login" | "signup" }) => {
             {isSignUp ? "Sign in" : "Sign up"}
           </Link>
         </p>
-
       </div>
     </div>
   );
