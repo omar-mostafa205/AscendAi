@@ -20,12 +20,12 @@ async function bootstrap() {
 
     await connectDb()
 
-    // await redisQueue.ping()
+    await redisQueue.ping()
     logger.info("Redis connected")
 
     const { app, server, io } = createServer()
 
-    // await startSessionWorker()
+    await startSessionWorker()
 
     const PORT = env.PORT
 
@@ -41,8 +41,8 @@ async function bootstrap() {
 
       server.close(() => logger.info("HTTP server closed"))
       io.close(() => logger.info("WebSocket server closed"))
-      // await getSessionWorker()?.close() 
-      // await redisQueue.quit()
+      await getSessionWorker()?.close() 
+      await redisQueue.quit()
       await Sentry.close(2000)
       await disconnectDb()
 
