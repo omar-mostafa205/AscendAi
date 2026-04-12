@@ -13,13 +13,17 @@ export function AvatarDisplay({ image, label, error }: AvatarDisplayProps) {
       <div className="absolute inset-0 px-8 pb-8">
         <Card className="w-full h-full bg-white border-[#e5e1dc] overflow-hidden rounded-3xl">
           <div className="w-full h-full flex items-end justify-center relative">
-<div className="relative w-full max-w-2xl aspect-square 
+            <div
+              className="relative w-full max-w-2xl aspect-square 
   -mb-10 
   sm:-mb-30 
   md:-mb-34 
   lg:-mb-30 
   xl:-mb-30
-">              <Image
+"
+            >
+              {" "}
+              <Image
                 src={`/${image}`}
                 alt={label}
                 fill

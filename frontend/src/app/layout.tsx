@@ -18,12 +18,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className="bg-[#f5f2ef] antialiased"
-      >
-        <AppProviders>
-          {children}
-        </AppProviders>
+      <body className="bg-[#f5f2ef] antialiased">
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

@@ -1,13 +1,12 @@
-import { Router } from "express"
-import { authMiddleware } from "../../middleware/auth.middleware"
-import { endSession, getLiveToken, getSession } from "./session.controller"
+import { Router } from "express";
+import { authMiddleware } from "../../middleware/auth.middleware";
+import { endSession, getLiveToken, getSession } from "./session.controller";
 
-const sessionByIdRouter = Router()
+const sessionByIdRouter = Router();
 
-sessionByIdRouter.use(authMiddleware)
-sessionByIdRouter.get("/:id", getSession)
-sessionByIdRouter.post("/:id/end", endSession)
-sessionByIdRouter.get("/:id/live-token", getLiveToken)
+sessionByIdRouter.use(authMiddleware);
+sessionByIdRouter.get("/:id", getSession);
+sessionByIdRouter.post("/:id/end", endSession);
+sessionByIdRouter.get("/:id/live-token", getLiveToken);
 
-export default sessionByIdRouter
-
+export default sessionByIdRouter;

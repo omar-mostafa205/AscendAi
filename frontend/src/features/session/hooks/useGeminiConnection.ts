@@ -1,8 +1,11 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { SessionService } from "@/features/session/services/session.service";
-import { normalizeTranscript, shouldIgnoreTranscript, mergeTranscript } from "../utils";
+import {
+  normalizeTranscript,
+  shouldIgnoreTranscript,
+  mergeTranscript,
+} from "../utils";
 import { getStoredSessionHandle, storeSessionHandle } from "../utils";
-
 
 interface GeminiCallbacks {
   onAiStartedResponding?: () => void;
@@ -11,18 +14,16 @@ interface GeminiCallbacks {
   onInputTranscriptionUpdate?: () => void;
 }
 
-
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
 const CONNECT_TIMEOUT_MS = 15_000;
 
-
 export function useGeminiConnection(
   sessionId: string,
   onSaveMessage: (role: "user" | "assistant", content: string) => void,
   isUserSpeakingRef: React.MutableRefObject<boolean>,
-  callbacks?: GeminiCallbacks
+  callbacks?: GeminiCallbacks,
 ) {
   const [isConnected, setIsConnected] = useState(false);
   const [isModelSpeaking, setIsModelSpeaking] = useState(false);
@@ -71,7 +72,10 @@ export function useGeminiConnection(
 
   const send = useCallback((data: string) => {
     const ws = sessionRef.current;
-    if (ws?.readyState === WebSocket.OPEN && hasReceivedSetupCompleteRef.current) {
+    if (
+      ws?.readyState === WebSocket.OPEN &&
+      hasReceivedSetupCompleteRef.current
+    ) {
       ws.send(data);
     }
   }, []);
@@ -103,7 +107,9 @@ export function useGeminiConnection(
     scheduledNodesRef.current.push(source);
 
     source.onended = () => {
-      scheduledNodesRef.current = scheduledNodesRef.current.filter((n) => n !== source);
+      scheduledNodesRef.current = scheduledNodesRef.current.filter(
+        (n) => n !== source,
+      );
     };
   }, []);
 
@@ -115,7 +121,7 @@ export function useGeminiConnection(
       }
       playAudioChunk(base64Audio);
     },
-    [isUserSpeakingRef, playAudioChunk]
+    [isUserSpeakingRef, playAudioChunk],
   );
 
   const flushBufferedAiAudio = useCallback(() => {
@@ -140,12 +146,13 @@ export function useGeminiConnection(
     }
   }, []);
 
-
   const interrupt = useCallback(() => {
     const nodes = scheduledNodesRef.current;
-    scheduledNodesRef.current = [];   
+    scheduledNodesRef.current = [];
     nodes.forEach((n) => {
-      try { n.stop(); } catch {}
+      try {
+        n.stop();
+      } catch {}
     });
     nextPlayTimeRef.current = 0;
     send(
@@ -154,7 +161,7 @@ export function useGeminiConnection(
           turns: [{ role: "user", parts: [] }],
           turnComplete: true,
         },
-      })
+      }),
     );
     isModelSpeakingRef.current = false;
     setIsModelSpeaking(false);
@@ -177,7 +184,7 @@ export function useGeminiConnection(
       sessionRef.current = null;
       setIsConnected(false);
     },
-    [interrupt, flushPendingTranscripts, clearConnectTimeout]
+    [interrupt, flushPendingTranscripts, clearConnectTimeout],
   );
 
   const connect = useCallback(
@@ -228,7 +235,7 @@ export function useGeminiConnection(
               inputAudioTranscription: {},
               outputAudioTranscription: {},
             },
-          })
+          }),
         );
       };
 
@@ -261,7 +268,7 @@ export function useGeminiConnection(
                   ],
                   turnComplete: true,
                 },
-              })
+              }),
             );
           }
         }
@@ -320,7 +327,7 @@ export function useGeminiConnection(
             if (!shouldIgnoreTranscript(t)) {
               pendingAssistantTranscriptRef.current = mergeTranscript(
                 pendingAssistantTranscriptRef.current,
-                t
+                t,
               );
             }
           }
@@ -330,7 +337,7 @@ export function useGeminiConnection(
             if (!shouldIgnoreTranscript(t)) {
               pendingUserTranscriptRef.current = mergeTranscript(
                 pendingUserTranscriptRef.current,
-                t
+                t,
               );
               callbacksRef.current?.onInputTranscriptionUpdate?.();
             }
@@ -350,14 +357,16 @@ export function useGeminiConnection(
         if (msg.goAway) {
           const attempt = reconnectAttemptsRef.current;
           if (attempt >= MAX_RECONNECT_ATTEMPTS) {
-            setError(`Failed to reconnect after ${MAX_RECONNECT_ATTEMPTS} attempts`);
+            setError(
+              `Failed to reconnect after ${MAX_RECONNECT_ATTEMPTS} attempts`,
+            );
             disconnect(true);
             return;
           }
           reconnectAttemptsRef.current += 1;
           const delay = Math.min(
             BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt),
-            MAX_RECONNECT_DELAY_MS
+            MAX_RECONNECT_DELAY_MS,
           );
 
           disconnect(false);
@@ -383,7 +392,7 @@ export function useGeminiConnection(
         clearConnectTimeout();
         if (!hasReceivedSetupCompleteRef.current) {
           connectRejectRef.current?.(
-            new Error(`Closed before setupComplete (code=${event.code})`)
+            new Error(`Closed before setupComplete (code=${event.code})`),
           );
           connectResolveRef.current = null;
           connectRejectRef.current = null;
@@ -392,7 +401,7 @@ export function useGeminiConnection(
 
       return connectPromise;
     },
-    [sessionId, handleAudioOutput, disconnect, clearConnectTimeout]
+    [sessionId, handleAudioOutput, disconnect, clearConnectTimeout],
   );
 
   useEffect(() => {

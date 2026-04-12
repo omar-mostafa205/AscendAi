@@ -45,9 +45,12 @@ export function JobSessionsClient({ id }: JobSessionsClientProps) {
       <div className="min-h-screen bg-[#f5f2ef] flex items-center justify-center">
         <Card className={`max-w-md ${card}`}>
           <CardContent className="pt-6 text-center">
-            <h2 className="text-2xl font-serif mb-4 text-[#1f1f1f]">Job Not Found</h2>
+            <h2 className="text-2xl font-serif mb-4 text-[#1f1f1f]">
+              Job Not Found
+            </h2>
             <p className="text-[#676662] mb-6">
-              The job you&apos;re looking for doesn&apos;t exist or has been removed.
+              The job you&apos;re looking for doesn&apos;t exist or has been
+              removed.
             </p>
             <Button
               onClick={() => router.push("/jobs")}
@@ -66,7 +69,9 @@ export function JobSessionsClient({ id }: JobSessionsClientProps) {
       <div className="min-h-screen bg-[#f5f2ef] flex items-center justify-center">
         <Card className={`w-[400px] max-w-lg ${card}`}>
           <CardContent className="pt-6">
-            <p className="text-red-600 text-center overflow-clip">{error || "Failed to load job"}</p>
+            <p className="text-red-600 text-center overflow-clip">
+              {error || "Failed to load job"}
+            </p>
             <Button
               onClick={() => window.location.reload()}
               className="w-full mt-4 bg-[#1b1917] hover:bg-neutral-800 text-white"
@@ -91,7 +96,9 @@ export function JobSessionsClient({ id }: JobSessionsClientProps) {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Jobs
           </Button>
-          <h1 className="text-4xl font-serif mb-2 text-[#1f1f1f]">{job.title}</h1>
+          <h1 className="text-4xl font-serif mb-2 text-[#1f1f1f]">
+            {job.title}
+          </h1>
           <p className="text-xl text-[#676662]">{job.company}</p>
         </div>
 
@@ -111,4 +118,3 @@ export function JobSessionsClient({ id }: JobSessionsClientProps) {
     </div>
   );
 }
-

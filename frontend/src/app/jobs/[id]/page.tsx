@@ -12,13 +12,13 @@ export default async function JobSessionsPage({
   const isUuid =
     typeof id === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      id
+      id,
     );
   if (!isUuid) redirect("/jobs");
 
   return (
     <Suspense fallback={<div></div>}>
-    <JobSessionsClient id={id} />
+      <JobSessionsClient id={id} />
     </Suspense>
   );
 }

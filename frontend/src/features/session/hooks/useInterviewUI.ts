@@ -1,14 +1,21 @@
 import { useState, useCallback, useRef } from "react";
-import { SimulationStage, LoadingStepKey, LoadingStep, LOADING_STEPS } from "../types/simulation.types";
+import {
+  SimulationStage,
+  LoadingStepKey,
+  LoadingStep,
+  LOADING_STEPS,
+} from "../types/simulation.types";
 
 export const useInterviewUI = () => {
   const [stage, _setStage] = useState<SimulationStage>("idle");
   const [loadingSteps, setLoadingSteps] = useState<LoadingStep[]>(
-    (Object.entries(LOADING_STEPS) as [LoadingStepKey, any][]).map(([key, val]) => ({
-      key,
-      ...val,
-      completed: false
-    }))
+    (Object.entries(LOADING_STEPS) as [LoadingStepKey, any][]).map(
+      ([key, val]) => ({
+        key,
+        ...val,
+        completed: false,
+      }),
+    ),
   );
 
   const setStage = useCallback((newStage: SimulationStage) => {
@@ -20,20 +27,28 @@ export const useInterviewUI = () => {
   const lastUserStopRef = useRef<number>(0);
 
   const addMetric = useCallback((msg: string) => {
-    setMetrics(prev => [...prev, `${new Date().toISOString().split('T')[1].substring(0,8)} - ${msg}`]);
+    setMetrics((prev) => [
+      ...prev,
+      `${new Date().toISOString().split("T")[1].substring(0, 8)} - ${msg}`,
+    ]);
     // console.log(`[Simulation] ${msg}`);
   }, []);
 
-  const setLoadingStep = useCallback((key: LoadingStepKey, completed: boolean) => {
-    setLoadingSteps(prev => {
-      const updated = prev.map(s => s.key === key ? { ...s, completed } : s);
-      const step = updated.find(s => s.key === key);
-      if (step) {
-        // console.log(`🎬 Updating loading progress: ${step.label} - ${step.progress}% - ${step.description} - Completed: ${completed}`);
-      }
-      return updated;
-    });
-  }, []);
+  const setLoadingStep = useCallback(
+    (key: LoadingStepKey, completed: boolean) => {
+      setLoadingSteps((prev) => {
+        const updated = prev.map((s) =>
+          s.key === key ? { ...s, completed } : s,
+        );
+        const step = updated.find((s) => s.key === key);
+        if (step) {
+          // console.log(`🎬 Updating loading progress: ${step.label} - ${step.progress}% - ${step.description} - Completed: ${completed}`);
+        }
+        return updated;
+      });
+    },
+    [],
+  );
 
   const onUserStartedSpeaking = useCallback(() => {
     setStage("user_speaking");
@@ -49,7 +64,9 @@ export const useInterviewUI = () => {
   const onAiStartedResponding = useCallback(() => {
     setStage("ai_speaking");
     if (lastUserStopRef.current > 0) {
-      const responseTime = Math.round(performance.now() - lastUserStopRef.current);
+      const responseTime = Math.round(
+        performance.now() - lastUserStopRef.current,
+      );
       addMetric(`AI started responding (Response time: ${responseTime}ms)`);
       lastUserStopRef.current = 0;
     } else {
@@ -62,9 +79,16 @@ export const useInterviewUI = () => {
     addMetric("AI finished speaking");
   }, [addMetric, setStage]);
 
-  const onTokenUsage = useCallback((counts: { promptTokens?: number, responseTokens?: number, totalTokens?: number }) => {
-    addMetric(`Token usage update: ${JSON.stringify(counts)}`);
-  }, [addMetric]);
+  const onTokenUsage = useCallback(
+    (counts: {
+      promptTokens?: number;
+      responseTokens?: number;
+      totalTokens?: number;
+    }) => {
+      addMetric(`Token usage update: ${JSON.stringify(counts)}`);
+    },
+    [addMetric],
+  );
 
   return {
     stage,
@@ -78,6 +102,6 @@ export const useInterviewUI = () => {
     onTokenUsage,
     error,
     setError,
-    metrics
+    metrics,
   };
 };

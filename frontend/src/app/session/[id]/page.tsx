@@ -6,7 +6,9 @@ interface InterviewSessionPageProps {
   }>;
 }
 
-export default async function InterviewSessionPage({ params }: InterviewSessionPageProps) {
+export default async function InterviewSessionPage({
+  params,
+}: InterviewSessionPageProps) {
   const { id } = await params;
 
   return <InterviewSessionClient sessionId={id} />;

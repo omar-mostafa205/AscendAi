@@ -9,7 +9,10 @@ export interface InterviewSession {
   jobId: string;
 }
 
-export const SCENARIO_CONFIG: Record<ScenarioType, { label: string; image: string }> = {
+export const SCENARIO_CONFIG: Record<
+  ScenarioType,
+  { label: string; image: string }
+> = {
   technical: { label: "Technical", image: "purple-avatar.png" },
   background: { label: "Background", image: "blue-avatar.png" },
   culture: { label: "Culture", image: "orange-avatar.png" },

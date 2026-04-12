@@ -7,20 +7,27 @@ import { useSocket } from "./useSocket";
 import { useGeminiVoice } from "./useGeminiVoice";
 import { useInterviewUI } from "./useInterviewUI";
 import { SessionService } from "../services/session.service";
-import { InterviewSession, MAX_SESSION_DURATION_MS } from "../types/session.types";
+import {
+  InterviewSession,
+  MAX_SESSION_DURATION_MS,
+} from "../types/session.types";
 
-export function useInterviewSession(sessionId: string, session: InterviewSession | null) {
+export function useInterviewSession(
+  sessionId: string,
+  session: InterviewSession | null,
+) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const autoEndTimerRef = useRef<number | null>(null);
   const isEndingRef = useRef(false);
   const simulation = useInterviewUI();
-  const { saveMessage, endSession, isEnded, sessionJoined } = useSocket(sessionId);
+  const { saveMessage, endSession, isEnded, sessionJoined } =
+    useSocket(sessionId);
   const [micStartedAtMs, setMicStartedAtMs] = useState<number | null>(null);
 
   const onSaveMessage = useCallback(
     (role: "user" | "assistant", content: string) => saveMessage(role, content),
-    [saveMessage]
+    [saveMessage],
   );
 
   const {
@@ -114,7 +121,9 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
 
     try {
       if (session?.jobId) {
-        queryClient.invalidateQueries({ queryKey: ["sessions", session.jobId] });
+        queryClient.invalidateQueries({
+          queryKey: ["sessions", session.jobId],
+        });
       }
       await SessionService.endSession(sessionId);
     } catch {}
@@ -126,7 +135,17 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
       : "/jobs";
 
     router.replace(redirectUrl);
-  }, [interrupt, stopMic, flushPendingTranscripts, endSession, disconnect, router, session, sessionId, queryClient]);
+  }, [
+    interrupt,
+    stopMic,
+    flushPendingTranscripts,
+    endSession,
+    disconnect,
+    router,
+    session,
+    sessionId,
+    queryClient,
+  ]);
 
   useEffect(() => {
     if (!isEnded) return;
@@ -157,7 +176,10 @@ export function useInterviewSession(sessionId: string, session: InterviewSession
 
     if (!baseMs || Number.isNaN(baseMs)) return;
 
-    const remainingMs = Math.max(0, baseMs + MAX_SESSION_DURATION_MS - Date.now());
+    const remainingMs = Math.max(
+      0,
+      baseMs + MAX_SESSION_DURATION_MS - Date.now(),
+    );
 
     autoEndTimerRef.current = window.setTimeout(() => {
       handleEndInterview().catch(console.error);

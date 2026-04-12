@@ -1,4 +1,9 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/shared/components/ui/card";
 import { Button } from "@/shared/components/ui/button";
 import { AvatarCard } from "@/shared/components/AvatarCard";
 import { ScenarioType } from "@/features/jobs/types";
@@ -24,26 +29,30 @@ export function ScenarioPicker({
   return (
     <Card className={`mb-8 ${card}`}>
       <CardHeader>
-        <CardTitle className="text-[#1f1f1f]">Start New Practice Session</CardTitle>
+        <CardTitle className="text-[#1f1f1f]">
+          Start New Practice Session
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-          {(["technical", "background", "culture"] as ScenarioType[]).map((type) => {
-            const conf = scenarioConfig[type];
-            if (!conf) return null;
-            return (
-              <div key={type} onClick={() => onSelect(type)}>
-                <AvatarCard
-                  image={conf.image}
-                  backgroundColor={conf.backgroundColor}
-                  badge={conf.badge}
-                  isSelected={selectedScenario === type}
-                  title={`${jobTitle} — ${conf.label}`}
-                  description={conf.description}
-                />
-              </div>
-            );
-          })}
+          {(["technical", "background", "culture"] as ScenarioType[]).map(
+            (type) => {
+              const conf = scenarioConfig[type];
+              if (!conf) return null;
+              return (
+                <div key={type} onClick={() => onSelect(type)}>
+                  <AvatarCard
+                    image={conf.image}
+                    backgroundColor={conf.backgroundColor}
+                    badge={conf.badge}
+                    isSelected={selectedScenario === type}
+                    title={`${jobTitle} — ${conf.label}`}
+                    description={conf.description}
+                  />
+                </div>
+              );
+            },
+          )}
         </div>
 
         <Button
@@ -58,4 +67,3 @@ export function ScenarioPicker({
     </Card>
   );
 }
-

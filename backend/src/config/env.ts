@@ -1,58 +1,67 @@
-import { z } from "zod"
-import logger from "./logger"
-import dotenv from "dotenv"
-import fs from "node:fs"
-import path from "node:path"
-
+import { z } from "zod";
+import logger from "./logger";
+import dotenv from "dotenv";
+import fs from "node:fs";
+import path from "node:path";
 
 const envCandidates = [
   path.resolve(process.cwd(), ".env"),
   path.resolve(process.cwd(), "..", ".env"),
-]
+];
 for (const p of envCandidates) {
   if (fs.existsSync(p)) {
-    dotenv.config({ path: p })
-    break
+    dotenv.config({ path: p });
+    break;
   }
 }
 
-export const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]),
-  PORT: z.coerce.number().default(8001),
-  FRONTEND_URL: z.string().default("http://localhost:3000"),
-  SENTRY_DSN: z.string().optional(),
+export const envSchema = z
+  .object({
+    NODE_ENV: z.enum(["development", "test", "production"]),
+    PORT: z.coerce.number().default(8001),
+    FRONTEND_URL: z.string().default("http://localhost:3000"),
+    SENTRY_DSN: z.string().optional(),
 
-  SUPABASE_URL: z.string(),
-  SUPABASE_SERVICE_ROLE_KEY: z.string(),
+    SUPABASE_URL: z.string(),
+    SUPABASE_SERVICE_ROLE_KEY: z.string(),
 
-  DATABASE_URL: z.string(),
+    DATABASE_URL: z.string(),
 
-  GEMINI_LIVE_MODEL: z.string().optional().default("gemini-2.0-flash-live-001"),
-  GEMINI_API_KEY: z.string(),
-  GEMINI_MODEL: z.string().optional().default("gemini-2.5-flash"),
-  GEMINI_API_VERSION: z.string().optional().default("v1beta"),
-  REDIS_URL: z.string(),
-}).refine((data) => {
-  if (data.NODE_ENV === "production" && !data.FRONTEND_URL) {
-    return false
-  }
-  return true
-}, {
-  message: "FRONTEND_URL is required in production mode",
-  path: ["FRONTEND_URL"],
-})
+    GEMINI_LIVE_MODEL: z
+      .string()
+      .optional()
+      .default("gemini-2.0-flash-live-001"),
+    GEMINI_API_KEY: z.string(),
+    GEMINI_MODEL: z.string().optional().default("gemini-2.5-flash"),
+    GEMINI_API_VERSION: z.string().optional().default("v1beta"),
+    REDIS_URL: z.string(),
+  })
+  .refine(
+    (data) => {
+      if (data.NODE_ENV === "production" && !data.FRONTEND_URL) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "FRONTEND_URL is required in production mode",
+      path: ["FRONTEND_URL"],
+    },
+  );
 const validateEnv = () => {
-  const parsed = envSchema.safeParse(process.env)
+  const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
-    console.error("❌ Invalid environment variables:", JSON.stringify(parsed.error.format(), null, 2))
-    process.exit(1)
+    console.error(
+      "❌ Invalid environment variables:",
+      JSON.stringify(parsed.error.format(), null, 2),
+    );
+    process.exit(1);
   }
-  return parsed.data
-}
-export const env = validateEnv()
+  return parsed.data;
+};
+export const env = validateEnv();
 
 export const config = {
   isProduction: env.NODE_ENV === "production",
   isDevlopment: env.NODE_ENV === "development",
-
 };

@@ -1,16 +1,18 @@
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
-import { JobService } from "../services/job.service"
-import { SessionService } from "@/features/session/services/session.service"
-import { ScenarioType } from "../types"
-import type { Session } from "../types"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { JobService } from "../services/job.service";
+import { SessionService } from "@/features/session/services/session.service";
+import { ScenarioType } from "../types";
+import type { Session } from "../types";
 
 export function useJobSessions(jobId: string) {
-  const router = useRouter()
-  const queryClient = useQueryClient()
-  const [selectedScenario, setSelectedScenario] = useState<ScenarioType | null>(null)
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [selectedScenario, setSelectedScenario] = useState<ScenarioType | null>(
+    null,
+  );
 
   const {
     data: job,
@@ -20,42 +22,50 @@ export function useJobSessions(jobId: string) {
     queryKey: ["job", jobId],
     queryFn: () => JobService.getJobById(jobId),
     select: (res) => res.data,
-  })
+  });
 
-  const {
-    data: sessions,
-    isLoading: sessionsLoading,
-  } = useQuery({
+  const { data: sessions, isLoading: sessionsLoading } = useQuery({
     queryKey: ["sessions", jobId],
     queryFn: async () => (await SessionService.getSessions(jobId)).data,
     enabled: !!jobId,
     refetchInterval: (query) => {
-      const list = query.state.data as Session[] ;
-      return Array.isArray(list) && list.some((s) => s.status === "processing" || s.status === "active" || s.status === "in_progress") ? 2000 : false;
+      const list = query.state.data as Session[];
+      return Array.isArray(list) &&
+        list.some(
+          (s) =>
+            s.status === "processing" ||
+            s.status === "active" ||
+            s.status === "in_progress",
+        )
+        ? 2000
+        : false;
     },
-  })
+  });
 
   const { mutate: startInterview, isPending: creating } = useMutation({
     mutationFn: () =>
       SessionService.createSession(jobId, { scenarioType: selectedScenario! }),
     onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ["sessions", jobId] })
-      router.push(`/session/${response.data.session.id}`)
+      queryClient.invalidateQueries({ queryKey: ["sessions", jobId] });
+      router.push(`/session/${response.data.session.id}`);
     },
     onError: (error) => {
       toast.error("Failed to start interview", {
-        description: error instanceof Error ? "You have reached the maximum number of interviews" : "Unknown error",
-      })
+        description:
+          error instanceof Error
+            ? "You have reached the maximum number of interviews"
+            : "Unknown error",
+      });
     },
-  })
+  });
 
   const handleStartInterview = () => {
     if (!selectedScenario) {
-      toast.error("Please select a scenario type")
-      return
+      toast.error("Please select a scenario type");
+      return;
     }
-    startInterview()
-  }
+    startInterview();
+  };
 
   return {
     job,
@@ -66,5 +76,5 @@ export function useJobSessions(jobId: string) {
     setSelectedScenario,
     handleStartInterview,
     creating,
-  }
+  };
 }

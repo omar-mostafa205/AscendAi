@@ -29,7 +29,11 @@ export function SessionControls({
           }`}
           title={isMicActive ? "Mute Mic" : "Unmute Mic"}
         >
-          {isMicActive ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+          {isMicActive ? (
+            <Mic className="w-5 h-5" />
+          ) : (
+            <MicOff className="w-5 h-5" />
+          )}
         </Button>
 
         <Button

@@ -12,10 +12,7 @@ function getRedirectUrl() {
     : undefined;
 }
 
-export async function signIn(
-  email: string,
-  password: string
-): Promise<void> {
+export async function signIn(email: string, password: string): Promise<void> {
   const { error } = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -23,7 +20,7 @@ export async function signIn(
   handleError(error);
 }
 
-export async function signUp (email : string , password : string){
+export async function signUp(email: string, password: string) {
   const { error } = await supabase.auth.signUp({
     email,
     password,
@@ -36,9 +33,7 @@ export async function signOut(): Promise<void> {
   handleError(error);
 }
 
-export async function signInWithOAuth(
-  provider: OAuthProvider
-): Promise<void> {
+export async function signInWithOAuth(provider: OAuthProvider): Promise<void> {
   const { error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {

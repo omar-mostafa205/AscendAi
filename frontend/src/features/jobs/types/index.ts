@@ -1,45 +1,48 @@
 interface CreateJob {
-    title : string,
-    company : string,
-    jobDescription : string,
-}    
+  title: string;
+  company: string;
+  jobDescription: string;
+}
 interface Job {
-    id: string;
-    userId: string;
-    title: string;
-    company: string;
-    jobDescription: string;
-    createdAt: string;  
-    sessions?: Session[];
+  id: string;
+  userId: string;
+  title: string;
+  company: string;
+  jobDescription: string;
+  createdAt: string;
+  sessions?: Session[];
 }
 
 interface Session {
-  id: string
-  userId: string
-  jobId: string
-  personaId: string
-  scenarioType:  ScenarioType
-  status: SessionStatus
-  overallScore: number | null
-  feedback: unknown | null
-  startedAt: string
-  endedAt: string | null
-  createdAt: string
+  id: string;
+  userId: string;
+  jobId: string;
+  personaId: string;
+  scenarioType: ScenarioType;
+  status: SessionStatus;
+  overallScore: number | null;
+  feedback: unknown | null;
+  startedAt: string;
+  endedAt: string | null;
+  createdAt: string;
 }
 
-  
-  interface JobDetail {
-    id: string;
-    title: string;
-    company: string;
-    sessions: Session[];
-  }
+interface JobDetail {
+  id: string;
+  title: string;
+  company: string;
+  sessions: Session[];
+}
 
+type ScenarioType = "technical" | "background" | "culture";
+type SessionStatus =
+  | "completed"
+  | "in_progress"
+  | "pending"
+  | "processing"
+  | "active";
 
-type ScenarioType = "technical" | "background" | "culture"
-type SessionStatus = "completed" | "in_progress" | "pending" | "processing" | "active";
-
-export type { Job , CreateJob , ScenarioType , SessionStatus , JobDetail , Session}
+export type { Job, CreateJob, ScenarioType, SessionStatus, JobDetail, Session };
 export interface DashboardStats {
   totalSessions: number;
   averageScore: number;

@@ -1,6 +1,7 @@
 This frontend is part of the AscendAI monorepo.
 
 See the repo root documentation for full setup and architecture:
+
 - `README.md`
 
 ## Getting Started

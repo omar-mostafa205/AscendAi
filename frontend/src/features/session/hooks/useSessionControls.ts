@@ -5,7 +5,7 @@ import { useState, useCallback } from "react";
 export function useSessionControls(
   isMicActive: boolean,
   startMic: () => void,
-  stopMic: () => void
+  stopMic: () => void,
 ) {
   const [muted, setMuted] = useState(false);
 
