@@ -66,11 +66,6 @@ export function useGeminiConnection(
     const ws = sessionRef.current;
     if (ws?.readyState === WebSocket.OPEN && hasReceivedSetupCompleteRef.current) {
       ws.send(data);
-    } else {
-      console.warn("[Gemini] send() dropped — not ready", {
-        readyState: ws?.readyState,
-        hasSetupComplete: hasReceivedSetupCompleteRef.current,
-      });
     }
   }, []);
 
@@ -148,15 +143,9 @@ export function useGeminiConnection(
     setIsModelSpeaking(false);
   }, [send]);
 
-  // ─── Shared turn-end handler ────────────────────────────────────────────────
-  // Called on BOTH generationComplete AND turnComplete.
-  // Gemini Live sends generationComplete to signal end of audio output.
-  // turnComplete may also arrive (sometimes after). The guard prevents
-  // double-firing if both arrive for the same turn.
   const handleTurnEnd = useCallback(() => {
-    if (!isModelSpeakingRef.current) return; // already reset, skip duplicate
+    if (!isModelSpeakingRef.current) return;
 
-    console.log("[Gemini] ✅ Turn ended — resetting isModelSpeaking");
     isModelSpeakingRef.current = false;
     setIsModelSpeaking(false);
     callbacksRef.current?.onAiFinishedSpeaking?.();
@@ -184,7 +173,6 @@ export function useGeminiConnection(
 
   const disconnect = useCallback(
     (intentional = true) => {
-      console.log("[Gemini] disconnect called", { intentional });
       if (reconnectTimerRef.current !== null) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
@@ -207,7 +195,6 @@ export function useGeminiConnection(
 
   const connect = useCallback(
     async (options?: { token?: string }) => {
-      console.log("[Gemini] connect() called");
       setError(null);
       hasSentSetupRef.current = false;
       hasReceivedSetupCompleteRef.current = false;
@@ -242,7 +229,6 @@ export function useGeminiConnection(
       });
 
       ws.onopen = () => {
-        console.log("[Gemini] WebSocket opened");
         if (hasSentSetupRef.current) return;
         hasSentSetupRef.current = true;
 
@@ -261,7 +247,6 @@ export function useGeminiConnection(
             outputAudioTranscription: {},
           },
         }));
-        console.log("[Gemini] Setup message sent");
       };
 
       ws.onmessage = (event) => {
@@ -271,15 +256,7 @@ export function useGeminiConnection(
             : new TextDecoder().decode(event.data);
         const msg = JSON.parse(text);
 
-        console.log("[Gemini] Message received:", Object.keys(msg), {
-          hasTurnComplete: msg.serverContent?.turnComplete,
-          hasGenerationComplete: msg.serverContent?.generationComplete,
-          hasModelTurn: !!msg.serverContent?.modelTurn,
-          isModelSpeaking: isModelSpeakingRef.current,
-        });
-
         if (msg.setupComplete !== undefined) {
-          console.log("[Gemini] ✅ setupComplete received");
           hasReceivedSetupCompleteRef.current = true;
           clearConnectTimeout();
           setIsConnected(true);
@@ -288,9 +265,6 @@ export function useGeminiConnection(
           connectResolveRef.current = null;
           connectRejectRef.current = null;
 
-          // ✅ clientContent kickoff — AI speaks first immediately after setup.
-          // Works correctly now because we handle generationComplete
-          // to reset isModelSpeaking when the greeting finishes.
           if (!hasSentKickoffRef.current) {
             hasSentKickoffRef.current = true;
             ws.send(JSON.stringify({
@@ -304,7 +278,6 @@ export function useGeminiConnection(
                 turnComplete: true,
               },
             }));
-            console.log("[Gemini] ✅ Kickoff sent — AI will speak first");
           }
         }
 
@@ -316,26 +289,14 @@ export function useGeminiConnection(
               isModelSpeakingRef.current = true;
               setIsModelSpeaking(true);
               callbacksRef.current?.onAiStartedResponding?.();
-              console.log("[Gemini] 🤖 Model started speaking");
             }
             serverContent.modelTurn.parts?.forEach((p: any) => {
               if (p.inlineData?.data) handleAudioOutput(p.inlineData.data);
             });
           }
 
-          // ✅ generationComplete — the primary signal Gemini Live sends
-          // when audio output finishes. Must reset isModelSpeaking.
-          if (serverContent.generationComplete === true) {
-            console.log("[Gemini] ✅ generationComplete received");
-            handleTurnEnd();
-          }
-
-          // ✅ turnComplete — secondary signal, may also arrive.
-          // handleTurnEnd() has a guard to prevent double-firing.
-          if (serverContent.turnComplete === true) {
-            console.log("[Gemini] ✅ turnComplete received");
-            handleTurnEnd();
-          }
+          if (serverContent.generationComplete === true) handleTurnEnd();
+          if (serverContent.turnComplete === true) handleTurnEnd();
 
           if (serverContent.outputTranscription?.text) {
             const t = serverContent.outputTranscription.text;
@@ -364,12 +325,10 @@ export function useGeminiConnection(
           if (typeof handle === "string" && handle.trim()) {
             sessionHandleRef.current = handle;
             storeSessionHandle(sessionId, handle);
-            console.log("[Gemini] Session handle stored");
           }
         }
 
         if (msg.goAway) {
-          console.warn("[Gemini] goAway received — reconnecting");
           const attempt = reconnectAttemptsRef.current;
           if (attempt >= MAX_RECONNECT_ATTEMPTS) {
             setError(`Failed to reconnect after ${MAX_RECONNECT_ATTEMPTS} attempts`);
@@ -391,8 +350,7 @@ export function useGeminiConnection(
         if (msg.usageMetadata) callbacksRef.current?.onTokenUsage?.();
       };
 
-      ws.onerror = (err) => {
-        console.error("[Gemini] WebSocket error", err);
+      ws.onerror = () => {
         setError("WebSocket error");
         clearConnectTimeout();
         connectRejectRef.current?.(new Error("WebSocket error"));
@@ -401,15 +359,6 @@ export function useGeminiConnection(
       };
 
       ws.onclose = (event) => {
-        console.warn("[Gemini] WebSocket closed", {
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean,
-          intentional: isIntentionalDisconnectRef.current,
-          hadSetupComplete: hasReceivedSetupCompleteRef.current,
-        });
-
-        // Always reset so mic is never permanently blocked after a drop
         isModelSpeakingRef.current = false;
         setIsModelSpeaking(false);
         setIsConnected(false);
@@ -424,7 +373,6 @@ export function useGeminiConnection(
           return;
         }
 
-        // Auto-reconnect on unexpected mid-session drops
         if (!isIntentionalDisconnectRef.current) {
           const attempt = reconnectAttemptsRef.current;
           if (attempt >= MAX_RECONNECT_ATTEMPTS) {
@@ -436,7 +384,6 @@ export function useGeminiConnection(
             BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt),
             MAX_RECONNECT_DELAY_MS
           );
-          console.warn(`[Gemini] Reconnecting in ${delay}ms (attempt ${attempt + 1})`);
           reconnectTimerRef.current = setTimeout(() => {
             reconnectTimerRef.current = null;
             connect();
