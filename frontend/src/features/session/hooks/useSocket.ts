@@ -40,28 +40,25 @@ export const useSocket = (sessionId: string) => {
     };
   }, [socket, sessionId]);
 
-  const saveMessage = useCallback(
-    (role: "user" | "assistant", content: string) => {
-      // // console.log('[useSocket] saveMessage called:', {
+  const saveMessage = useCallback((role: "user" | "assistant", content: string) => {
+    // // console.log('[useSocket] saveMessage called:', { 
+    //   hasSocket: !!socket, 
+    //   sessionId, 
+    //   role, 
+    //   contentLength: content?.length 
+    // })
+
+    if (!socket || !sessionId) {
+      // // console.error('[useSocket] Cannot save message - socket or sessionId missing', {
       //   hasSocket: !!socket,
-      //   sessionId,
-      //   role,
-      //   contentLength: content?.length
+      //   sessionId
       // })
+      return
+    }
 
-      if (!socket || !sessionId) {
-        // // console.error('[useSocket] Cannot save message - socket or sessionId missing', {
-        //   hasSocket: !!socket,
-        //   sessionId
-        // })
-        return;
-      }
-
-      socket.emit("save_message", { sessionId, role, content });
-      console.log("[useSocket] Message emitted to socket");
-    },
-    [socket, sessionId],
-  );
+    socket.emit("save_message", { sessionId, role, content })
+    console.log('[useSocket] Message emitted to socket')
+  }, [socket, sessionId])
 
   const endSession = useCallback(() => {
     if (!socket || !sessionId) return;

@@ -1,10 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { SessionService } from "@/features/session/services/session.service";
-import {
-  normalizeTranscript,
-  shouldIgnoreTranscript,
-  mergeTranscript,
-} from "../utils";
+import { normalizeTranscript, shouldIgnoreTranscript, mergeTranscript } from "../utils";
 import { getStoredSessionHandle, storeSessionHandle } from "../utils";
 
 interface GeminiCallbacks {
@@ -23,21 +19,17 @@ export function useGeminiConnection(
   sessionId: string,
   onSaveMessage: (role: "user" | "assistant", content: string) => void,
   isUserSpeakingRef: React.MutableRefObject<boolean>,
-  callbacks?: GeminiCallbacks,
+  callbacks?: GeminiCallbacks
 ) {
   const [isConnected, setIsConnected] = useState(false);
   const [isModelSpeaking, setIsModelSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const callbacksRef = useRef<GeminiCallbacks | undefined>(callbacks);
-  useEffect(() => {
-    callbacksRef.current = callbacks;
-  }, [callbacks]);
+  useEffect(() => { callbacksRef.current = callbacks; }, [callbacks]);
 
   const onSaveMessageRef = useRef(onSaveMessage);
-  useEffect(() => {
-    onSaveMessageRef.current = onSaveMessage;
-  }, [onSaveMessage]);
+  useEffect(() => { onSaveMessageRef.current = onSaveMessage; }, [onSaveMessage]);
 
   const sessionRef = useRef<WebSocket | null>(null);
   const isModelSpeakingRef = useRef(false);
@@ -72,11 +64,13 @@ export function useGeminiConnection(
 
   const send = useCallback((data: string) => {
     const ws = sessionRef.current;
-    if (
-      ws?.readyState === WebSocket.OPEN &&
-      hasReceivedSetupCompleteRef.current
-    ) {
+    if (ws?.readyState === WebSocket.OPEN && hasReceivedSetupCompleteRef.current) {
       ws.send(data);
+    } else {
+      console.warn("[Gemini] send() dropped — not ready", {
+        readyState: ws?.readyState,
+        hasSetupComplete: hasReceivedSetupCompleteRef.current,
+      });
     }
   }, []);
 
@@ -105,11 +99,8 @@ export function useGeminiConnection(
     source.start(nextPlayTimeRef.current);
     nextPlayTimeRef.current += buf.duration;
     scheduledNodesRef.current.push(source);
-
     source.onended = () => {
-      scheduledNodesRef.current = scheduledNodesRef.current.filter(
-        (n) => n !== source,
-      );
+      scheduledNodesRef.current = scheduledNodesRef.current.filter((n) => n !== source);
     };
   }, []);
 
@@ -121,7 +112,7 @@ export function useGeminiConnection(
       }
       playAudioChunk(base64Audio);
     },
-    [isUserSpeakingRef, playAudioChunk],
+    [isUserSpeakingRef, playAudioChunk]
   );
 
   const flushBufferedAiAudio = useCallback(() => {
@@ -136,11 +127,7 @@ export function useGeminiConnection(
     const user = pendingUserTranscriptRef.current
       ? normalizeTranscript(pendingUserTranscriptRef.current)
       : null;
-    if (
-      user &&
-      !shouldIgnoreTranscript(user) &&
-      user !== lastSavedUserTranscriptRef.current
-    ) {
+    if (user && !shouldIgnoreTranscript(user) && user !== lastSavedUserTranscriptRef.current) {
       lastSavedUserTranscriptRef.current = user;
       onSaveMessageRef.current("user", user);
     }
@@ -149,50 +136,81 @@ export function useGeminiConnection(
   const interrupt = useCallback(() => {
     const nodes = scheduledNodesRef.current;
     scheduledNodesRef.current = [];
-    nodes.forEach((n) => {
-      try {
-        n.stop();
-      } catch {}
-    });
+    nodes.forEach((n) => { try { n.stop(); } catch { } });
     nextPlayTimeRef.current = 0;
-    send(
-      JSON.stringify({
-        clientContent: {
-          turns: [{ role: "user", parts: [] }],
-          turnComplete: true,
-        },
-      }),
-    );
+    send(JSON.stringify({
+      clientContent: {
+        turns: [{ role: "user", parts: [] }],
+        turnComplete: true,
+      },
+    }));
     isModelSpeakingRef.current = false;
     setIsModelSpeaking(false);
   }, [send]);
 
+  // ─── Shared turn-end handler ────────────────────────────────────────────────
+  // Called on BOTH generationComplete AND turnComplete.
+  // Gemini Live sends generationComplete to signal end of audio output.
+  // turnComplete may also arrive (sometimes after). The guard prevents
+  // double-firing if both arrive for the same turn.
+  const handleTurnEnd = useCallback(() => {
+    if (!isModelSpeakingRef.current) return; // already reset, skip duplicate
+
+    console.log("[Gemini] ✅ Turn ended — resetting isModelSpeaking");
+    isModelSpeakingRef.current = false;
+    setIsModelSpeaking(false);
+    callbacksRef.current?.onAiFinishedSpeaking?.();
+    if (scheduledNodesRef.current.length === 0) nextPlayTimeRef.current = 0;
+
+    const userRaw = pendingUserTranscriptRef.current;
+    if (userRaw) {
+      const userT = normalizeTranscript(userRaw);
+      if (userT && !shouldIgnoreTranscript(userRaw) && userT !== lastSavedUserTranscriptRef.current) {
+        lastSavedUserTranscriptRef.current = userT;
+        onSaveMessageRef.current("user", userT);
+      }
+      pendingUserTranscriptRef.current = null;
+    }
+
+    const t = pendingAssistantTranscriptRef.current
+      ? normalizeTranscript(pendingAssistantTranscriptRef.current)
+      : null;
+    if (t && !shouldIgnoreTranscript(t) && t !== lastSavedAssistantTranscriptRef.current) {
+      lastSavedAssistantTranscriptRef.current = t;
+      onSaveMessageRef.current("assistant", t);
+    }
+    pendingAssistantTranscriptRef.current = null;
+  }, []);
+
   const disconnect = useCallback(
     (intentional = true) => {
+      console.log("[Gemini] disconnect called", { intentional });
       if (reconnectTimerRef.current !== null) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
       isIntentionalDisconnectRef.current = intentional;
+      isModelSpeakingRef.current = false;
+      setIsModelSpeaking(false);
       flushPendingTranscripts();
       interrupt();
       clearConnectTimeout();
-      playbackContextRef.current?.close().catch(() => {});
+      playbackContextRef.current?.close().catch(() => { });
       playbackContextRef.current = null;
       bufferedAiAudioRef.current = [];
       sessionRef.current?.close();
       sessionRef.current = null;
       setIsConnected(false);
     },
-    [interrupt, flushPendingTranscripts, clearConnectTimeout],
+    [interrupt, flushPendingTranscripts, clearConnectTimeout]
   );
 
   const connect = useCallback(
     async (options?: { token?: string }) => {
+      console.log("[Gemini] connect() called");
       setError(null);
       hasSentSetupRef.current = false;
       hasReceivedSetupCompleteRef.current = false;
-
       hasSentKickoffRef.current = false;
 
       const token =
@@ -224,19 +242,26 @@ export function useGeminiConnection(
       });
 
       ws.onopen = () => {
+        console.log("[Gemini] WebSocket opened");
         if (hasSentSetupRef.current) return;
         hasSentSetupRef.current = true;
-        const handle =
-          sessionHandleRef.current ?? getStoredSessionHandle(sessionId);
-        ws.send(
-          JSON.stringify({
-            setup: {
-              ...(handle ? { sessionResumption: { handle } } : {}),
-              inputAudioTranscription: {},
-              outputAudioTranscription: {},
+
+        const handle = sessionHandleRef.current ?? getStoredSessionHandle(sessionId);
+
+        ws.send(JSON.stringify({
+          setup: {
+            ...(handle ? { sessionResumption: { handle } } : {}),
+            model: "models/gemini-2.0-flash-live-001",
+            system_instruction: {
+              parts: [{
+                text: "You are a professional interview assistant conducting a voice interview. Ask the candidate thoughtful interview questions and evaluate their responses. Be warm, professional, and encouraging. Keep all responses concise and conversational.",
+              }],
             },
-          }),
-        );
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+          },
+        }));
+        console.log("[Gemini] Setup message sent");
       };
 
       ws.onmessage = (event) => {
@@ -246,7 +271,15 @@ export function useGeminiConnection(
             : new TextDecoder().decode(event.data);
         const msg = JSON.parse(text);
 
+        console.log("[Gemini] Message received:", Object.keys(msg), {
+          hasTurnComplete: msg.serverContent?.turnComplete,
+          hasGenerationComplete: msg.serverContent?.generationComplete,
+          hasModelTurn: !!msg.serverContent?.modelTurn,
+          isModelSpeaking: isModelSpeakingRef.current,
+        });
+
         if (msg.setupComplete !== undefined) {
+          console.log("[Gemini] ✅ setupComplete received");
           hasReceivedSetupCompleteRef.current = true;
           clearConnectTimeout();
           setIsConnected(true);
@@ -255,21 +288,23 @@ export function useGeminiConnection(
           connectResolveRef.current = null;
           connectRejectRef.current = null;
 
+          // ✅ clientContent kickoff — AI speaks first immediately after setup.
+          // Works correctly now because we handle generationComplete
+          // to reset isModelSpeaking when the greeting finishes.
           if (!hasSentKickoffRef.current) {
             hasSentKickoffRef.current = true;
-            ws.send(
-              JSON.stringify({
-                clientContent: {
-                  turns: [
-                    {
-                      role: "user",
-                      parts: [{ text: "Start the interview now." }],
-                    },
-                  ],
-                  turnComplete: true,
-                },
-              }),
-            );
+            ws.send(JSON.stringify({
+              clientContent: {
+                turns: [
+                  {
+                    role: "user",
+                    parts: [{ text: "Start the interview now." }],
+                  },
+                ],
+                turnComplete: true,
+              },
+            }));
+            console.log("[Gemini] ✅ Kickoff sent — AI will speak first");
           }
         }
 
@@ -281,53 +316,32 @@ export function useGeminiConnection(
               isModelSpeakingRef.current = true;
               setIsModelSpeaking(true);
               callbacksRef.current?.onAiStartedResponding?.();
+              console.log("[Gemini] 🤖 Model started speaking");
             }
             serverContent.modelTurn.parts?.forEach((p: any) => {
               if (p.inlineData?.data) handleAudioOutput(p.inlineData.data);
             });
           }
 
-          if (serverContent.turnComplete) {
-            isModelSpeakingRef.current = false;
-            setIsModelSpeaking(false);
-            callbacksRef.current?.onAiFinishedSpeaking?.();
-            if (scheduledNodesRef.current.length === 0)
-              nextPlayTimeRef.current = 0;
+          // ✅ generationComplete — the primary signal Gemini Live sends
+          // when audio output finishes. Must reset isModelSpeaking.
+          if (serverContent.generationComplete === true) {
+            console.log("[Gemini] ✅ generationComplete received");
+            handleTurnEnd();
+          }
 
-            const userRaw = pendingUserTranscriptRef.current;
-            if (userRaw) {
-              const userT = normalizeTranscript(userRaw);
-              if (
-                userT &&
-                !shouldIgnoreTranscript(userRaw) &&
-                userT !== lastSavedUserTranscriptRef.current
-              ) {
-                lastSavedUserTranscriptRef.current = userT;
-                onSaveMessageRef.current("user", userT);
-              }
-              pendingUserTranscriptRef.current = null;
-            }
-
-            const t = pendingAssistantTranscriptRef.current
-              ? normalizeTranscript(pendingAssistantTranscriptRef.current)
-              : null;
-            if (
-              t &&
-              !shouldIgnoreTranscript(t) &&
-              t !== lastSavedAssistantTranscriptRef.current
-            ) {
-              lastSavedAssistantTranscriptRef.current = t;
-              onSaveMessageRef.current("assistant", t);
-            }
-            pendingAssistantTranscriptRef.current = null;
+          // ✅ turnComplete — secondary signal, may also arrive.
+          // handleTurnEnd() has a guard to prevent double-firing.
+          if (serverContent.turnComplete === true) {
+            console.log("[Gemini] ✅ turnComplete received");
+            handleTurnEnd();
           }
 
           if (serverContent.outputTranscription?.text) {
             const t = serverContent.outputTranscription.text;
             if (!shouldIgnoreTranscript(t)) {
               pendingAssistantTranscriptRef.current = mergeTranscript(
-                pendingAssistantTranscriptRef.current,
-                t,
+                pendingAssistantTranscriptRef.current, t
               );
             }
           }
@@ -336,8 +350,7 @@ export function useGeminiConnection(
             const t = serverContent.inputTranscription.text;
             if (!shouldIgnoreTranscript(t)) {
               pendingUserTranscriptRef.current = mergeTranscript(
-                pendingUserTranscriptRef.current,
-                t,
+                pendingUserTranscriptRef.current, t
               );
               callbacksRef.current?.onInputTranscriptionUpdate?.();
             }
@@ -351,24 +364,23 @@ export function useGeminiConnection(
           if (typeof handle === "string" && handle.trim()) {
             sessionHandleRef.current = handle;
             storeSessionHandle(sessionId, handle);
+            console.log("[Gemini] Session handle stored");
           }
         }
 
         if (msg.goAway) {
+          console.warn("[Gemini] goAway received — reconnecting");
           const attempt = reconnectAttemptsRef.current;
           if (attempt >= MAX_RECONNECT_ATTEMPTS) {
-            setError(
-              `Failed to reconnect after ${MAX_RECONNECT_ATTEMPTS} attempts`,
-            );
+            setError(`Failed to reconnect after ${MAX_RECONNECT_ATTEMPTS} attempts`);
             disconnect(true);
             return;
           }
           reconnectAttemptsRef.current += 1;
           const delay = Math.min(
             BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt),
-            MAX_RECONNECT_DELAY_MS,
+            MAX_RECONNECT_DELAY_MS
           );
-
           disconnect(false);
           reconnectTimerRef.current = setTimeout(() => {
             reconnectTimerRef.current = null;
@@ -379,7 +391,8 @@ export function useGeminiConnection(
         if (msg.usageMetadata) callbacksRef.current?.onTokenUsage?.();
       };
 
-      ws.onerror = () => {
+      ws.onerror = (err) => {
+        console.error("[Gemini] WebSocket error", err);
         setError("WebSocket error");
         clearConnectTimeout();
         connectRejectRef.current?.(new Error("WebSocket error"));
@@ -388,20 +401,52 @@ export function useGeminiConnection(
       };
 
       ws.onclose = (event) => {
+        console.warn("[Gemini] WebSocket closed", {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          intentional: isIntentionalDisconnectRef.current,
+          hadSetupComplete: hasReceivedSetupCompleteRef.current,
+        });
+
+        // Always reset so mic is never permanently blocked after a drop
+        isModelSpeakingRef.current = false;
+        setIsModelSpeaking(false);
         setIsConnected(false);
         clearConnectTimeout();
+
         if (!hasReceivedSetupCompleteRef.current) {
           connectRejectRef.current?.(
-            new Error(`Closed before setupComplete (code=${event.code})`),
+            new Error(`Closed before setupComplete (code=${event.code})`)
           );
           connectResolveRef.current = null;
           connectRejectRef.current = null;
+          return;
+        }
+
+        // Auto-reconnect on unexpected mid-session drops
+        if (!isIntentionalDisconnectRef.current) {
+          const attempt = reconnectAttemptsRef.current;
+          if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+            setError(`Connection lost after ${MAX_RECONNECT_ATTEMPTS} attempts`);
+            return;
+          }
+          reconnectAttemptsRef.current += 1;
+          const delay = Math.min(
+            BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt),
+            MAX_RECONNECT_DELAY_MS
+          );
+          console.warn(`[Gemini] Reconnecting in ${delay}ms (attempt ${attempt + 1})`);
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
+            connect();
+          }, delay);
         }
       };
 
       return connectPromise;
     },
-    [sessionId, handleAudioOutput, disconnect, clearConnectTimeout],
+    [sessionId, handleAudioOutput, disconnect, clearConnectTimeout, handleTurnEnd]
   );
 
   useEffect(() => {
